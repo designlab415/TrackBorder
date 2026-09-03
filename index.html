@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RC Rennstrecken Konfigurator (1:50)</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- CDN Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/STLExporter.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+</head>
+<body>
+    <div id="app">
+        <!-- Control Panel -->
+        <div id="sidebar">
+            <div id="sidebarHeader">
+                <h2>RC Track Builder</h2>
+                <span class="scale-badge">Maßstab 1:50</span>
+            </div>
+
+            <!-- 1. Strecken-Vorlage -->
+            <div class="section">
+                <h3><span class="step-badge">1</span>Strecken-Vorlage</h3>
+                <label>Preset auswählen:</label>
+                <select id="presetSelect">
+                    <option value="">-- Vorlage auswählen --</option>
+                </select>
+
+                <div class="input-row">
+                    <div>
+                        <label>Länge (m):</label>
+                        <input type="number" id="trackLength" value="2.7" step="0.01" min="0.1">
+                    </div>
+                    <div>
+                        <label>Breite (m):</label>
+                        <input type="number" id="trackWidth" value="1.5" step="0.01" min="0.1">
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. Skizzieren -->
+            <div class="section">
+                <h3><span class="step-badge">2</span>Skizzieren</h3>
+
+                <div class="hint-box">
+                    <strong>Strang zeichnen:</strong> Klick setzt Punkte. Doppelklick, Enter oder das grüne Plus neben dem letzten Punkt schließen einen Strang ab - danach beginnt der nächste Klick automatisch einen neuen. Escape verwirft den aktuellen Strang.<br>
+                    <strong>Punkt bearbeiten:</strong> Klick auf einen Punkt wählt ihn aus (gelber Ring + rotes ✕-Popup) - ziehen zum Verschieben, Entf/Rücktaste oder Button zum Löschen. Rechtsklick auf eine Linie fügt dort einen neuen Punkt ein.<br>
+                    <strong>Ansicht:</strong> Shift+Ziehen oder Rechtsklick auf leere Fläche = Verschieben, Mausrad = Zoom.<br>
+                    <span class="legend-dot legend-green"></span> Start &nbsp; <span class="legend-dot legend-red"></span> Ende &nbsp; <span class="legend-dot legend-orange"></span> Curb-Außenseite (Pfeil anklicken zum Umkehren)
+                </div>
+
+                <div class="hint" id="sketchStatus">Keine Skizze vorhanden.</div>
+
+                <div class="button-row">
+                    <button id="finishPathBtn" class="btn-secondary">Strang abschließen</button>
+                    <button id="deleteSelectedPointBtn" class="btn-secondary" disabled>Punkt löschen</button>
+                </div>
+                <button id="toggleOuterSideBtn" class="btn-secondary">Curb-Außenseite umkehren ⇄</button>
+                <button id="clearPoints" class="btn-danger-outline">Skizze Löschen</button>
+            </div>
+
+            <!-- 3. Element-Typ & 3D-Modell -->
+            <div class="section">
+                <h3><span class="step-badge">3</span>Element-Typ &amp; 3D-Modell</h3>
+                <select id="elementType">
+                    <option value="bande">Bande (Beton-Leitwand-Optik)</option>
+                    <option value="curb">Curb (Rampe zur Fahrbahn)</option>
+                </select>
+                <div class="input-row" id="bandeDimsRow">
+                    <div>
+                        <label>Bande Höhe (mm):</label>
+                        <input type="number" id="bandeHeight" value="15" step="0.5" min="3">
+                    </div>
+                    <div>
+                        <label>Bande Breite (mm):</label>
+                        <input type="number" id="bandeThickness" value="10" step="0.5" min="4">
+                    </div>
+                </div>
+                <div class="input-row" id="curbDimsRow">
+                    <div>
+                        <label>Curb Höhe (mm):</label>
+                        <input type="number" id="curbHeight" value="2" step="0.1" min="0.2">
+                    </div>
+                    <div>
+                        <label>Curb Tiefe (mm):</label>
+                        <input type="number" id="curbDepth" value="20" step="0.5" min="4">
+                    </div>
+                </div>
+                <button id="generate3d" class="btn-primary">3D Modell Generieren</button>
+            </div>
+
+            <!-- 4. Projekt Speichern / Laden -->
+            <div class="section">
+                <h3><span class="step-badge">4</span>Projekt Speichern / Laden</h3>
+                <div class="button-row">
+                    <button id="saveFileBtn" class="btn-secondary">Speichern (.json)</button>
+                    <button id="loadFileBtn" class="btn-secondary">Laden (.json)</button>
+                </div>
+                <input type="file" id="projectFileInput" accept=".json" style="display: none;">
+            </div>
+
+            <!-- 5. Stückliste & Export -->
+            <div class="section">
+                <h3><span class="step-badge">5</span>Stückliste &amp; Export</h3>
+                <div id="partList">Keine Segmente generiert</div>
+                <button id="exportStl" class="btn-primary" disabled>STL Dateiensatz (.zip) Download</button>
+                <button id="export3mf" class="btn-secondary" disabled>3MF Download (mit Farbe)</button>
+                <div class="hint">STL enthält keine Farbinformationen (Format-Grenze). 3MF ist ein modernes ZIP/XML-Format mit Farbe pro Bauteil - unterstützt u.a. von BambuStudio, OrcaSlicer, PrusaSlicer &amp; Cura. STEP (echtes CAD-Format) ist im Browser nicht erzeugbar.</div>
+            </div>
+        </div>
+
+        <!-- Drawing & 3D Viewport -->
+        <div id="viewports">
+            <div class="viewport-container">
+                <span class="label">2D Skizze</span>
+                <canvas id="sketchCanvas"></canvas>
+                <div id="pathFinishPopup" class="path-finish-popup" style="display:none;">
+                    <button id="newStrandPopupBtn" class="popup-btn popup-btn-check" title="Strang abschließen">✓</button>
+                </div>
+                <div id="pointDeletePopup" class="point-delete-popup" style="display:none;">
+                    <button id="deletePointPopupBtn" class="popup-btn popup-btn-delete" title="Punkt löschen">✕</button>
+                </div>
+            </div>
+            <div class="viewport-container">
+                <span class="label">3D Vorschau (Platte = 250×250mm Druckbett)</span>
+                <div id="threeContainer"></div>
+            </div>
+        </div>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>

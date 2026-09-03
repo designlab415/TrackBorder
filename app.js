@@ -28,26 +28,65 @@ const RESAMPLE_STEP_MM = 2; // Auflösung der Mittellinie für glattere Kurven
 // Curb-Höhe bewusst SEHR niedrig (an der CAD-Vorlage orientiert, dort nur ~1,5mm) - sonst
 // bleiben RC-Fahrzeuge mit niedriger Bodenfreiheit am Curb hängen.
 const ELEMENT_PROFILES = {
-    bande: { height: 15, thickness: 10, color: 0xb8b8b8, label: "Bande" },
+    bande: { height: 20, thickness: 13, color: 0xb8b8b8, label: "Bande" },
     curb:  { height: 2,  thickness: 20, color: 0xff5533, label: "Curb" }
 };
 
 // Bande-Optik: gestufte, sich nach oben verjüngende Form wie eine Beton-Leitwand (NORDBETON-
 // Style) statt eines einfachen rechteckigen Blocks. Jede Stufe trägt ihre eigene Zunge/Nut
 // (siehe buildSegmentOutline) - dadurch ist die Steckverbindung wie gewünscht durchgängig.
+// Bande-Optik: gestufte, sich nach oben verjüngende Form wie eine Beton-Leitwand (NORDBETON-
+// Style) statt eines einfachen rechteckigen Blocks. Profil aus der vom Nutzer bereitgestellten
+// Referenzdatei (Bande-gerade.3MF) abgelesen: bei 13mm Breite / 20mm Höhe hat sie einen 3mm
+// senkrechten Fuß (volle Breite), dann eine Schräge bis 13,77mm Höhe (Halbbreite 6,5mm -> 3,0mm),
+// dann einen senkrechten Schaft bis zur 20mm-Oberkante. h = Höhenanteil (0..1), w = Halbbreiten-
+// Anteil (bezogen auf die halbe Gesamtbreite). Jede Stufe trägt ihre eigene Zunge/Nut (siehe
+// buildSegmentOutline) - dadurch ist die Steckverbindung durchgängig.
 const BANDE_STYLE = {
-    steps: 4,             // Anzahl Stufen von der breiten Basis zur schmaleren Oberkante
-    topWidthRatio: 0.55,  // Breite der obersten Stufe relativ zur Basisbreite
-    baseHeightRatio: 0.32 // Anteil der Gesamthöhe, den die unterste (volle Breite) Stufe einnimmt
+    profileKeyframes: [
+        { h: 0.00, w: 1.0000 },
+        { h: 0.15, w: 1.0000 },  // Fuß endet (3mm von 20mm)
+        { h: 0.6885, w: 0.4615 }, // Schräge endet (13,77mm von 20mm)
+        { h: 1.00, w: 0.4615 }   // Schaft bis Oberkante
+    ],
+    slopeSubSteps: 5 // in wie viele Treppenstufen die Schräge unterteilt wird (mehr = glatter)
 };
+
+// Wandelt die Profil-Keyframes in eine Liste konkreter Stufen { hFrom, hTo, w } um. Abschnitte
+// ohne Breitenänderung (Fuß, Schaft) bleiben EINE Stufe; die Schräge wird in slopeSubSteps kleine
+// Treppenstufen unterteilt, die den linearen Übergang annähern (mehr Stufen = glatterer Verlauf).
+function getBandeLayers() {
+    const kf = BANDE_STYLE.profileKeyframes;
+    const layers = [];
+    for (let i = 0; i < kf.length - 1; i++) {
+        const a = kf[i], b = kf[i + 1];
+        if (Math.abs(a.w - b.w) < 1e-6) {
+            layers.push({ hFrom: a.h, hTo: b.h, w: a.w });
+        } else {
+            const n = BANDE_STYLE.slopeSubSteps;
+            for (let s = 0; s < n; s++) {
+                const t0 = s / n, t1 = (s + 1) / n;
+                layers.push({
+                    hFrom: a.h + (b.h - a.h) * t0,
+                    hTo: a.h + (b.h - a.h) * t1,
+                    w: a.w + (b.w - a.w) * t0
+                });
+            }
+        }
+    }
+    return layers;
+}
 
 // Schwalbenschwanz / Puzzle-Zunge (mm)
 const DOVETAIL = {
     tabLength: 5,          // wie weit die Zunge über das Segmentende hinausragt
-    tabWidthRatio: 0.42,   // Anteil der Wandbreite, den die Zungenbasis einnimmt (vor Kappung)
-    maxTabHalfMM: 3.2,      // Obergrenze für die halbe Zungenbasis - verhindert überbreite/flache
-                            // Zungen bei breiten Bauteilen wie dem Curb (Zunge bleibt handlich)
-    tabFlare: 2.0,          // Spitze ist um diesen Betrag breiter als die Basis (Trapez)
+    marginRatio: 1 / 3,    // Anteil der GESAMTBREITE, der links+rechts als Restwand stehen bleibt
+                            // (zusammen) - die restlichen 2/3 sind die Zunge an ihrer breitesten
+                            // Stelle. Skaliert dadurch automatisch mit der Bauteilbreite (schmale
+                            // Bande -> kleine Zunge, breiter Curb -> kräftige Zunge), statt eines
+                            // festen mm-Werts.
+    tabFlareRatio: 0.16,   // wie viel schmaler die Zungen-BASIS gegenüber der Spitze ist, ebenfalls
+                            // relativ zur Bauteilbreite (sorgt für die Trapez-/Schwalbenschwanz-Form)
     clearance: 0.2,         // Durchgängiger Spalt zwischen Zunge und Nut (mm) für sauberen Sitz nach dem Druck
     minWallMM: 1.0          // Mindest-Restwandstärke außen um die Nut - bei zu dünnen Bauteilen
                              // (schmale Bande, flacher Curb) wird die Zunge automatisch verkleinert
@@ -78,6 +117,7 @@ let startPanY = 0;
 let paths = [];
 let currentPath = [];
 let pendingOuterSign = 1; // gilt für den nächsten Strang, der abgeschlossen wird
+let insertPointMode = false; // Alternative zu Rechtsklick (v.a. für Touch/Mobilgeräte)
 
 // Punkt-Auswahl/Verschieben: { point: {fx,fy}-Objektreferenz, containerType: 'current'|'path', pathIndex }
 let selectedPointRef = null;
@@ -100,6 +140,9 @@ document.addEventListener('DOMContentLoaded', () => {
     init3DScene();
     initPresets();
     setupEventListeners();
+    setupTabs();
+    setupMobileNav();
+    setupTouchEvents();
     updateSketchStatus();
     updateDeleteButtonState();
     updateOuterSideToggleLabel();
@@ -596,6 +639,58 @@ function getTransformedMousePos(e) {
 }
 
 // --- 6. EVENT LISTENERS (ZOOM, PAN, SKIZZIEREN, 3D, EXPORT, PROJEKT) ---
+// --- TABS (Sidebar) & MOBILE BOTTOM NAV ---
+function setupTabs() {
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+            btn.classList.add('active');
+            const panel = document.querySelector(`.tab-panel[data-panel="${btn.dataset.tab}"]`);
+            if (panel) panel.classList.add('active');
+        });
+    });
+}
+
+function setupMobileNav() {
+    document.querySelectorAll('.mnav-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.mnav-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            document.body.classList.remove('mview-sketch', 'mview-3d', 'mview-settings');
+            document.body.classList.add('mview-' + btn.dataset.view);
+
+            // Canvas/Renderer waren ggf. unsichtbar (display:none) und kennen daher ihre
+            // korrekte Größe nicht mehr - nach dem Sichtbarwerden neu berechnen.
+            if (btn.dataset.view === '3d') {
+                setTimeout(() => {
+                    const container = document.getElementById('threeContainer');
+                    if (container && renderer && camera) {
+                        const w = container.clientWidth, h = container.clientHeight || 1;
+                        camera.aspect = w / h;
+                        camera.updateProjectionMatrix();
+                        renderer.setSize(w, h);
+                    }
+                }, 50);
+            } else if (btn.dataset.view === 'sketch') {
+                setTimeout(() => { resizeCanvasToDisplaySize(); redraw2DCanvas(); }, 50);
+            }
+        });
+    });
+    document.body.classList.add('mview-sketch');
+}
+
+// Zoomt zentriert auf die Canvas-Mitte (für die +/- Buttons, v.a. auf Touch-Geräten ohne Mausrad).
+function zoomBy(factor) {
+    if (!canvas2D) return;
+    const cx = canvas2D.width / 2, cy = canvas2D.height / 2;
+    let newZoom = Math.min(Math.max(0.5, zoomLevel * factor), 10);
+    panX = cx - (cx - panX) * (newZoom / zoomLevel);
+    panY = cy - (cy - panY) * (newZoom / zoomLevel);
+    zoomLevel = newZoom;
+    redraw2DCanvas();
+}
+
 function setupEventListeners() {
     const presetSelect = document.getElementById('presetSelect');
     if (presetSelect) {
@@ -651,6 +746,20 @@ function setupEventListeners() {
         deletePopupBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             deleteSelectedPoint();
+        });
+    }
+
+    const zoomInBtn = document.getElementById('zoomInBtn');
+    if (zoomInBtn) zoomInBtn.addEventListener('click', () => zoomBy(1.25));
+    const zoomOutBtn = document.getElementById('zoomOutBtn');
+    if (zoomOutBtn) zoomOutBtn.addEventListener('click', () => zoomBy(0.8));
+
+    const insertModeBtn = document.getElementById('insertPointModeBtn');
+    if (insertModeBtn) {
+        insertModeBtn.addEventListener('click', () => {
+            insertPointMode = !insertPointMode;
+            insertModeBtn.textContent = `📍 Punkt-Einfügen-Modus: ${insertPointMode ? 'An' : 'Aus'}`;
+            insertModeBtn.classList.toggle('active-toggle', insertPointMode);
         });
     }
 
@@ -766,6 +875,22 @@ function setupEventListeners() {
         if (e.detail && e.detail >= 2) return;
 
         const pos = getTransformedMousePos(e);
+
+        // Punkt-Einfügen-Modus: Alternative zu Rechtsklick (v.a. am Smartphone nützlich, wo es
+        // keinen Rechtsklick gibt) - Klick/Tap auf eine Linie fügt dort einen Punkt ein.
+        if (insertPointMode) {
+            const target = findInsertionTarget(pos);
+            if (target) {
+                const frac = canvasPosToFraction(pos);
+                const arr = target.containerType === 'current' ? currentPath : paths[target.pathIndex].points;
+                arr.splice(target.insertIndex, 0, frac);
+                redraw2DCanvas();
+                updateSketchStatus();
+                autosave();
+                return;
+            }
+        }
+
         const frac = canvasPosToFraction(pos);
         currentPath.push(frac);
         redraw2DCanvas();
@@ -826,6 +951,156 @@ function setupEventListeners() {
     window.addEventListener('resize', () => {
         resizeCanvasToDisplaySize();
         redraw2DCanvas();
+    });
+}
+
+// --- TOUCH-GESTEN (Mobilgeräte) ---
+// Bewusst als EIGENE, ZUSÄTZLICHE Event-Ebene umgesetzt (nicht in die bestehenden Maus-Handler
+// eingebaut), damit das erprobte Desktop-Verhalten unverändert bleibt. Wiederverwendet dieselben
+// Zustands-Variablen/Funktionen (paths, currentPath, findPointNear, canvasPosToFraction, ...).
+// Gesten: Ein Finger antippen = Punkt setzen/auswählen (bzw. Linie treffen im Einfüge-Modus).
+// Ein Finger auf einen Punkt + ziehen = Punkt verschieben. Ein Finger auf leere Fläche + ziehen =
+// Ansicht verschieben. Zwei Finger = Pinch-Zoom.
+let touchState = { mode: null, startX: 0, startY: 0, moved: false, draggingPoint: null,
+    panStartX: 0, panStartY: 0, pinchStartDist: 0, pinchStartZoom: 1, pinchMidX: 0, pinchMidY: 0,
+    arrowHit: null };
+
+function getTouchCanvasPos(touch) {
+    const rect = canvas2D.getBoundingClientRect();
+    return { x: touch.clientX - rect.left, y: touch.clientY - rect.top };
+}
+
+function setupTouchEvents() {
+    if (!canvas2D) return;
+
+    canvas2D.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 2) {
+            e.preventDefault();
+            const p1 = getTouchCanvasPos(e.touches[0]);
+            const p2 = getTouchCanvasPos(e.touches[1]);
+            touchState.mode = 'pinch';
+            touchState.pinchStartDist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+            touchState.pinchStartZoom = zoomLevel;
+            touchState.pinchMidX = (p1.x + p2.x) / 2;
+            touchState.pinchMidY = (p1.y + p2.y) / 2;
+            return;
+        }
+        if (e.touches.length !== 1) return;
+
+        const raw = getTouchCanvasPos(e.touches[0]);
+        touchState.startX = raw.x;
+        touchState.startY = raw.y;
+        touchState.moved = false;
+
+        if (!bgImage) { touchState.mode = null; return; }
+
+        const pos = { x: (raw.x - panX) / zoomLevel, y: (raw.y - panY) / zoomLevel };
+
+        const arrowHit = findArrowNear(pos);
+        if (arrowHit !== null) {
+            touchState.mode = 'arrow-hit';
+            touchState.arrowHit = arrowHit;
+            return;
+        }
+
+        const hit = findPointNear(pos);
+        if (hit) {
+            touchState.mode = 'point-drag';
+            touchState.draggingPoint = hit;
+            selectedPointRef = hit;
+            redraw2DCanvas();
+            updateDeleteButtonState();
+        } else {
+            // Sofort abwählen (analog zum mousedown-Verhalten am PC) - ob daraus ein Tap (neuer
+            // Punkt) oder ein Pan wird, entscheidet sich erst bei touchmove/touchend.
+            selectedPointRef = null;
+            draggingPointRef = null;
+            updateDeleteButtonState();
+            touchState.mode = 'pending';
+        }
+    }, { passive: false });
+
+    canvas2D.addEventListener('touchmove', (e) => {
+        if (touchState.mode === 'pinch' && e.touches.length === 2) {
+            e.preventDefault();
+            const p1 = getTouchCanvasPos(e.touches[0]);
+            const p2 = getTouchCanvasPos(e.touches[1]);
+            const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+            if (touchState.pinchStartDist > 10) {
+                const newZoom = Math.min(Math.max(0.5, touchState.pinchStartZoom * (dist / touchState.pinchStartDist)), 10);
+                const mx = touchState.pinchMidX, my = touchState.pinchMidY;
+                panX = mx - (mx - panX) * (newZoom / zoomLevel);
+                panY = my - (my - panY) * (newZoom / zoomLevel);
+                zoomLevel = newZoom;
+                redraw2DCanvas();
+            }
+            return;
+        }
+        if (e.touches.length !== 1) return;
+
+        const raw = getTouchCanvasPos(e.touches[0]);
+        const dx = raw.x - touchState.startX, dy = raw.y - touchState.startY;
+        if (Math.hypot(dx, dy) > 6) touchState.moved = true;
+
+        if (touchState.mode === 'point-drag' && touchState.draggingPoint) {
+            e.preventDefault();
+            const pos = { x: (raw.x - panX) / zoomLevel, y: (raw.y - panY) / zoomLevel };
+            const frac = canvasPosToFraction(pos);
+            if (frac) {
+                touchState.draggingPoint.point.fx = frac.fx;
+                touchState.draggingPoint.point.fy = frac.fy;
+                redraw2DCanvas();
+            }
+        } else if ((touchState.mode === 'pending' || touchState.mode === 'pan') && touchState.moved) {
+            e.preventDefault();
+            if (touchState.mode === 'pending') {
+                touchState.mode = 'pan';
+                touchState.panStartX = panX;
+                touchState.panStartY = panY;
+            }
+            panX = touchState.panStartX + (raw.x - touchState.startX);
+            panY = touchState.panStartY + (raw.y - touchState.startY);
+            redraw2DCanvas();
+        }
+    }, { passive: false });
+
+    canvas2D.addEventListener('touchend', () => {
+        if (touchState.mode === 'point-drag') {
+            if (touchState.moved) autosave();
+        } else if (touchState.mode === 'arrow-hit' && !touchState.moved) {
+            if (touchState.arrowHit === 'pending') {
+                pendingOuterSign *= -1;
+                updateOuterSideToggleLabel();
+            } else {
+                paths[touchState.arrowHit].outerSign *= -1;
+                autosave();
+            }
+            redraw2DCanvas();
+        } else if (touchState.mode === 'pending' && !touchState.moved && bgImage) {
+            // Tap auf leere Fläche / eine Linie
+            const pos = { x: (touchState.startX - panX) / zoomLevel, y: (touchState.startY - panY) / zoomLevel };
+
+            if (insertPointMode) {
+                const target = findInsertionTarget(pos);
+                if (target) {
+                    const frac = canvasPosToFraction(pos);
+                    const arr = target.containerType === 'current' ? currentPath : paths[target.pathIndex].points;
+                    arr.splice(target.insertIndex, 0, frac);
+                    redraw2DCanvas();
+                    updateSketchStatus();
+                    autosave();
+                    touchState.mode = null;
+                    return;
+                }
+            }
+
+            const frac = canvasPosToFraction(pos);
+            currentPath.push(frac);
+            redraw2DCanvas();
+            updateSketchStatus();
+        }
+        touchState.mode = null;
+        touchState.draggingPoint = null;
     });
 }
 
@@ -936,15 +1211,26 @@ function splitPathIntoSegments(pathPointsFrac) {
 }
 
 // Berechnet Zapfen-Maße (Basis-/Spitzenhalbbreite) für eine gegebene Querschnitts-Halbbreite,
-// unter Einhaltung der Mindestwandstärke (DOVETAIL.minWallMM). possible=false, wenn selbst eine
+// unter Einhaltung der Mindestwandstärke (DOVETAIL.minWallMM). Skaliert proportional mit der
+// Bauteilbreite (1/3 Rand gesamt, 2/3 Zunge an der Spitze) - possible=false, wenn selbst eine
 // minimale Zunge nicht ohne Bruchgefahr reinpasst.
 function computeTabSize(halfWidth) {
     const clearance = DOVETAIL.clearance;
-    const availableHalf = halfWidth - DOVETAIL.minWallMM - clearance;
-    if (availableHalf < 0.6) return { possible: false, tabHalf: 0, tabTipHalf: 0 };
-    let tabTipHalf = Math.min(Math.min(halfWidth * DOVETAIL.tabWidthRatio, DOVETAIL.maxTabHalfMM) + DOVETAIL.tabFlare, availableHalf);
-    let tabHalf = Math.min(halfWidth * DOVETAIL.tabWidthRatio, DOVETAIL.maxTabHalfMM, tabTipHalf - 0.3);
+
+    // Zunge nimmt proportional (1 - marginRatio) der Breite ein, unabhängig von der absoluten
+    // Bauteilgröße - dadurch wird sie bei einem breiten Curb automatisch kräftiger als bei einer
+    // schmalen Bande, statt an einem festen mm-Wert gedeckelt zu sein.
+    let tabTipHalf = halfWidth * (1 - DOVETAIL.marginRatio);
+    let tabHalf = tabTipHalf - halfWidth * DOVETAIL.tabFlareRatio;
+
+    // Mindestwandstärke sicherstellen (Bruchgefahr bei zu dünnem Restmaterial) - wenn die
+    // proportionale Zunge das verletzen würde, wird sie so weit verkleinert, wie nötig.
+    const maxAllowedTipHalf = halfWidth - DOVETAIL.minWallMM - clearance;
+    if (maxAllowedTipHalf < 0.6) return { possible: false, tabHalf: 0, tabTipHalf: 0 };
+    if (tabTipHalf > maxAllowedTipHalf) tabTipHalf = maxAllowedTipHalf;
+    if (tabHalf > tabTipHalf - 0.3) tabHalf = tabTipHalf - 0.3;
     if (tabHalf < 0.3) tabHalf = tabTipHalf * 0.5;
+
     return { possible: true, tabHalf, tabTipHalf };
 }
 
@@ -1284,43 +1570,35 @@ function buildCurbRampMeshes(localChunk, thickness, totalHeight, baseHeight, out
 // Curb über die gesamte Höhe durchgängig, nicht nur an der Basis.
 function buildBandeMeshes(localChunk, thickness, totalHeight, hasStartNotch, hasEndTab, roundStart, roundEnd, color) {
     const meshes = [];
-    const steps = BANDE_STYLE.steps;
-    const baseHeight = totalHeight * BANDE_STYLE.baseHeightRatio;
-    const otherStepsHeight = (totalHeight - baseHeight) / (steps - 1);
+    const layers = getBandeLayers();
     const material = new THREE.MeshStandardMaterial({ color, metalness: 0.05, roughness: 0.9 });
 
-    // Gemeinsame Zunge/Nut für ALLE Stufen, abgeleitet von der SCHMALSTEN Stufe (meist die
-    // Oberkante) - sonst würde jede Stufe ihre eigene, unterschiedlich große Zunge bekommen,
-    // was gestapelt wie mehrere kleine Zacken statt einer sauberen Zunge aussieht. Da Bande
-    // symmetrisch ist (-halfWidth/+halfWidth), liegt die Mitte ohnehin bei jeder Stufe exakt
-    // bei 0 - anchorOffset ist hier also nur der Vollständigkeit halber gesetzt.
+    // Gemeinsame Zunge/Nut für ALLE Stufen, abgeleitet von der SCHMALSTEN Stufe (bei diesem
+    // Profil der Schaft/die Oberkante) - sonst würde jede Stufe ihre eigene, unterschiedlich
+    // große Zunge bekommen, was gestapelt wie mehrere kleine Zacken statt einer sauberen Zunge
+    // aussieht. Bande ist symmetrisch, daher liegt die Mitte ohnehin bei jeder Stufe exakt bei 0.
     let narrowestHalfWidth = Infinity;
-    for (let step = 1; step <= steps; step++) {
-        const widthFrac = 1 - ((step - 1) / (steps - 1)) * (1 - BANDE_STYLE.topWidthRatio);
-        narrowestHalfWidth = Math.min(narrowestHalfWidth, (thickness / 2) * widthFrac);
-    }
+    layers.forEach(l => { narrowestHalfWidth = Math.min(narrowestHalfWidth, (thickness / 2) * l.w); });
     const tabSize = computeTabSize(narrowestHalfWidth);
     const sharedTab = { tabHalf: tabSize.tabHalf, tabTipHalf: tabSize.tabTipHalf, possible: tabSize.possible, anchorOffset: 0 };
 
-    let zCursor = 0;
-    for (let step = 1; step <= steps; step++) {
-        const stepHeight = step === 1 ? baseHeight : otherStepsHeight;
-        const widthFrac = 1 - ((step - 1) / (steps - 1)) * (1 - BANDE_STYLE.topWidthRatio);
-        const halfWidth = (thickness / 2) * widthFrac;
+    layers.forEach(l => {
+        const layerHeight = totalHeight * (l.hTo - l.hFrom);
+        if (layerHeight <= 0.001) return;
+        const halfWidth = (thickness / 2) * l.w;
 
         const outline = buildSegmentOutline(localChunk, -halfWidth, halfWidth, hasStartNotch, hasEndTab, roundStart, roundEnd, sharedTab);
         if (outline.length >= 3) {
             const shape = new THREE.Shape(outline.map(p => new THREE.Vector2(p.x, p.y)));
             try {
-                const geometry = new THREE.ExtrudeGeometry(shape, { depth: stepHeight, bevelEnabled: false, steps: 1 });
-                geometry.translate(0, 0, zCursor);
+                const geometry = new THREE.ExtrudeGeometry(shape, { depth: layerHeight, bevelEnabled: false, steps: 1 });
+                geometry.translate(0, 0, totalHeight * l.hFrom);
                 meshes.push(new THREE.Mesh(geometry, material));
             } catch (err) {
                 console.error('Bande-Stufe übersprungen (ungültige Geometrie)', err);
             }
         }
-        zCursor += stepHeight;
-    }
+    });
 
     return meshes;
 }

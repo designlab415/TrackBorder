@@ -12,9 +12,15 @@
  */
 
 // --- 1. GLOBALE KONFIGURATION & VARIABLEN ---
-const PRESET_FILES = [
+// Streckenbilder im Ordner ./assets/tracks/.
+// Neue Assets HIER eintragen. Das Schema ist immer:
+// Hersteller_Streckenname_Laenge-Breite.webp   (Laenge/Breite in cm)
+// Beispiel: "ideallinie_circuit-de-drift-challenges_270-150.webp"
+const TRACK_FILES = [
     "ideallinie_circuit-de-drift-challenges_270-150.webp",
     "ideallinie_Tölkeschleife_400-200.webp"
+    // Weitere Dateien einfach als neue Zeile ergänzen, z.B.:
+    // ,"Hersteller_Streckenname_300-180.webp"
 ];
 
 // Druckbett-Limit (mm). EFFECTIVE_MAX ist der Sicherheitsabstand darunter.
@@ -174,39 +180,118 @@ document.addEventListener('DOMContentLoaded', () => {
     tryRestoreAutosave();
 });
 
-// --- 3. PRESETS IM DROPDOWN BEFÜLLEN ---
-function initPresets() {
+// --- 3. STRECKEN-AUSWAHL: HERSTELLER -> STRECKE ---
+function parseTrackFilename(filename) {
+    const cleanName = filename.replace(/\.[^/.]+$/, '');
+    const parts = cleanName.split('_');
+    if (parts.length < 3) return null;
+
+    const manufacturerKey = parts[0];
+    const sizeToken = parts[parts.length - 1];
+    const trackToken = parts.slice(1, -1).join('_');
+    const sizeParts = sizeToken.split('-');
+    if (sizeParts.length !== 2) return null;
+
+    const lengthCM = parseFloat(sizeParts[0].replace(',', '.'));
+    const widthCM = parseFloat(sizeParts[1].replace(',', '.'));
+    if (!Number.isFinite(lengthCM) || !Number.isFinite(widthCM)) return null;
+
+    return {
+        filename,
+        manufacturerKey,
+        manufacturerLabel: prettyTrackLabel(manufacturerKey),
+        trackKey: trackToken,
+        trackLabel: prettyTrackLabel(trackToken),
+        lengthCM,
+        widthCM
+    };
+}
+
+function prettyTrackLabel(value) {
+    return String(value || '')
+        .replace(/[-_]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .replace(/(^|\s)([a-zäöü])/g, (_, a, b) => a + b.toUpperCase());
+}
+
+function getTrackCatalog() {
+    return TRACK_FILES
+        .map(parseTrackFilename)
+        .filter(Boolean)
+        .sort((a, b) =>
+            a.manufacturerLabel.localeCompare(b.manufacturerLabel, 'de') ||
+            a.trackLabel.localeCompare(b.trackLabel, 'de')
+        );
+}
+
+function populateTrackSelect(manufacturerKey, selectedFilename = '') {
     const select = document.getElementById('presetSelect');
     if (!select) return;
 
-    select.innerHTML = '<option value="">-- Vorlage auswählen --</option>';
+    select.innerHTML = '';
+    if (!manufacturerKey) {
+        select.innerHTML = '<option value="">-- zuerst Hersteller auswählen --</option>';
+        select.disabled = true;
+        return;
+    }
 
-    PRESET_FILES.forEach(filename => {
-        const cleanName = filename.replace(/\.[^/.]+$/, "");
-        const parts = cleanName.split('_');
+    const tracks = getTrackCatalog().filter(t => t.manufacturerKey === manufacturerKey);
+    select.disabled = tracks.length === 0;
+    select.innerHTML = '<option value="">-- Strecke auswählen --</option>';
 
-        let label = cleanName;
-        if (parts.length >= 3) {
-            const trackName = parts[1].replace(/-/g, ' ');
-            const sizeParts = parts[2].split('-');
-
-            if (sizeParts.length === 2) {
-                const lengthM = (parseFloat(sizeParts[0]) / 100).toLocaleString('de-DE');
-                const widthM = (parseFloat(sizeParts[1]) / 100).toLocaleString('de-DE');
-                label = `${trackName} (Länge: ${lengthM}m x Breite: ${widthM}m)`;
-            }
-        }
-
+    tracks.forEach(track => {
         const option = document.createElement('option');
-        option.value = filename;
-        option.textContent = label;
+        option.value = track.filename;
+        option.textContent = `${track.trackLabel} (${track.lengthCM.toLocaleString('de-DE')} × ${track.widthCM.toLocaleString('de-DE')} cm)`;
         select.appendChild(option);
     });
+
+    if (selectedFilename && tracks.some(t => t.filename === selectedFilename)) {
+        select.value = selectedFilename;
+    }
+}
+
+function initPresets() {
+    const manufacturerSelect = document.getElementById('manufacturerSelect');
+    const presetSelect = document.getElementById('presetSelect');
+    if (!manufacturerSelect || !presetSelect) return;
+
+    const catalog = getTrackCatalog();
+    const manufacturers = [];
+    const seen = new Set();
+    catalog.forEach(track => {
+        if (!seen.has(track.manufacturerKey)) {
+            seen.add(track.manufacturerKey);
+            manufacturers.push({ key: track.manufacturerKey, label: track.manufacturerLabel });
+        }
+    });
+
+    manufacturerSelect.innerHTML = '<option value="">-- Hersteller auswählen --</option>';
+    manufacturers.forEach(m => {
+        const option = document.createElement('option');
+        option.value = m.key;
+        option.textContent = m.label;
+        manufacturerSelect.appendChild(option);
+    });
+
+    populateTrackSelect('');
+}
+
+function selectPresetInUI(filename) {
+    const info = parseTrackFilename(filename);
+    const manufacturerSelect = document.getElementById('manufacturerSelect');
+    if (!info || !manufacturerSelect) return false;
+
+    manufacturerSelect.value = info.manufacturerKey;
+    populateTrackSelect(info.manufacturerKey, filename);
+    return true;
 }
 
 // --- 4. BILD LADEN & MAßE AUTOMATISCH SETZEN ---
 function loadPresetImage(filename) {
     if (!filename) {
+        currentPresetFilename = '';
         bgImage = null;
         resetZoomAndPan();
         redraw2DCanvas();
@@ -214,21 +299,13 @@ function loadPresetImage(filename) {
     }
 
     currentPresetFilename = filename;
+    const info = parseTrackFilename(filename);
 
-    const cleanName = filename.replace(/\.[^/.]+$/, "");
-    const parts = cleanName.split('_');
-    const sizeStr = parts[parts.length - 1];
-    const dimensions = sizeStr.split('-');
-
-    if (dimensions.length === 2) {
-        const lengthM = parseFloat(dimensions[0]) / 100;
-        const widthM = parseFloat(dimensions[1]) / 100;
-
+    if (info) {
         const inputLength = document.getElementById('trackLength');
         const inputWidth = document.getElementById('trackWidth');
-
-        if (inputLength && !isNaN(lengthM)) inputLength.value = lengthM;
-        if (inputWidth && !isNaN(widthM)) inputWidth.value = widthM;
+        if (inputLength) inputLength.value = info.lengthCM;
+        if (inputWidth) inputWidth.value = info.widthCM;
     }
 
     const img = new Image();
@@ -236,15 +313,17 @@ function loadPresetImage(filename) {
         bgImage = img;
         resetZoomAndPan();
         redraw2DCanvas();
+        autosave();
     };
 
     img.onerror = () => {
         bgImage = null;
         redraw2DCanvas();
-        console.error("Bild konnte nicht geladen werden: " + filename);
+        console.error('Bild konnte nicht geladen werden: ' + filename);
+        alert('Streckenbild konnte nicht geladen werden: ./assets/tracks/' + filename);
     };
 
-    img.src = "./assets/tracks/" + filename;
+    img.src = './assets/tracks/' + filename;
 }
 
 function resetZoomAndPan() {
@@ -722,7 +801,20 @@ function zoomBy(factor) {
 }
 
 function setupEventListeners() {
+    const manufacturerSelect = document.getElementById('manufacturerSelect');
     const presetSelect = document.getElementById('presetSelect');
+
+    if (manufacturerSelect) {
+        manufacturerSelect.addEventListener('change', (e) => {
+            populateTrackSelect(e.target.value);
+            currentPresetFilename = '';
+            bgImage = null;
+            resetZoomAndPan();
+            redraw2DCanvas();
+            autosave();
+        });
+    }
+
     if (presetSelect) {
         presetSelect.addEventListener('change', (e) => loadPresetImage(e.target.value));
     }
@@ -1851,16 +1943,145 @@ function clipConvexPolygonByURange(poly, uMin, uMax) {
     return out;
 }
 
+// Bestimmt den Querabstand u eines Punktes zur tatsächlichen (ggf. gekrümmten)
+// Mittellinie der Steckverbinder-Zone. Im Gegensatz zur früheren V8-Lösung wird
+// NICHT nur eine einzige globale Normale für die ganze Zone verwendet. Gerade in
+// Kurven hatte das die Querbänder schräg durch den Curb geschnitten und sichtbare
+// Dreiecks-Artefakte erzeugt.
+function curbTransverseUAtPoint(v, points, outerSign) {
+    const dir = outerSign >= 0 ? 1 : -1;
+    let bestD2 = Infinity;
+    let bestU = 0;
+
+    for (let i = 1; i < points.length; i++) {
+        const a = points[i - 1], b = points[i];
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const len2 = dx * dx + dy * dy;
+        if (len2 < 1e-12) continue;
+
+        let t = ((v.x - a.x) * dx + (v.y - a.y) * dy) / len2;
+        t = Math.max(0, Math.min(1, t));
+        const qx = a.x + dx * t, qy = a.y + dy * t;
+        const ex = v.x - qx, ey = v.y - qy;
+        const d2 = ex * ex + ey * ey;
+        if (d2 >= bestD2) continue;
+
+        const len = Math.sqrt(len2);
+        const nx = -dy / len, ny = dx / len;
+        bestD2 = d2;
+        bestU = dir * (ex * nx + ey * ny);
+    }
+
+    return bestU;
+}
+
+function polygonArea2D(poly) {
+    let a = 0;
+    for (let i = 0; i < poly.length; i++) {
+        const p = poly[i], q = poly[(i + 1) % poly.length];
+        a += p.x * q.y - q.x * p.y;
+    }
+    return a * 0.5;
+}
+
+function cleanPolygon2D(poly) {
+    const out = [];
+    poly.forEach(v => {
+        const prev = out[out.length - 1];
+        if (!prev || Math.hypot(v.x - prev.x, v.y - prev.y) > 1e-6) out.push({ x: v.x, y: v.y, u: v.u });
+    });
+    if (out.length > 2 && Math.hypot(out[0].x - out[out.length - 1].x, out[0].y - out[out.length - 1].y) < 1e-6) out.pop();
+    if (out.length >= 3 && polygonArea2D(out) < 0) out.reverse();
+    return out;
+}
+
+// Extrudiert viele aneinandergrenzende, bereits triangulierte Teilpolygone als
+// EIN gemeinsames BufferGeometry. Interne Dreieckskanten werden erkannt und
+// bekommen KEINE Seitenwände. Das beseitigt die vielen überlappenden Mini-
+// Extrusionen aus V8, die als Risse/Dreiecke im Curb sichtbar wurden.
+function buildClosedExtrudedRegionMesh(polygons, z0, z1, material) {
+    if (!polygons.length || z1 - z0 < 1e-6) return null;
+
+    const positions = [];
+    const indices = [];
+    const vertexMap = new Map();
+    const edgeMap = new Map();
+    const Q = 100000; // 0,00001 mm Quantisierung für gemeinsame Kanten
+
+    function pointKey(v) {
+        return `${Math.round(v.x * Q)},${Math.round(v.y * Q)}`;
+    }
+
+    function vertexIndex(v, top) {
+        const pk = pointKey(v);
+        const key = `${pk},${top ? 1 : 0}`;
+        if (vertexMap.has(key)) return vertexMap.get(key);
+        const idx = positions.length / 3;
+        positions.push(v.x, v.y, top ? z1 : z0);
+        vertexMap.set(key, idx);
+        return idx;
+    }
+
+    polygons.forEach(raw => {
+        const poly = cleanPolygon2D(raw);
+        if (poly.length < 3 || Math.abs(polygonArea2D(poly)) < 1e-9) return;
+
+        // Ober- und Unterseite: die geclippten Dreiecke sind konvex, daher reicht
+        // eine stabile Fächer-Triangulierung.
+        const top0 = vertexIndex(poly[0], true);
+        const bot0 = vertexIndex(poly[0], false);
+        for (let i = 1; i < poly.length - 1; i++) {
+            const top1 = vertexIndex(poly[i], true);
+            const top2 = vertexIndex(poly[i + 1], true);
+            const bot1 = vertexIndex(poly[i], false);
+            const bot2 = vertexIndex(poly[i + 1], false);
+            indices.push(top0, top1, top2);
+            indices.push(bot0, bot2, bot1);
+        }
+
+        // Kanten zählen. Eine Kante, die zweimal vorkommt, liegt zwischen zwei
+        // Teilpolygonen und ist intern; nur einfach vorkommende Kanten sind echte
+        // Außenkontur und benötigen eine vertikale Wand.
+        for (let i = 0; i < poly.length; i++) {
+            const a = poly[i], b = poly[(i + 1) % poly.length];
+            const ka = pointKey(a), kb = pointKey(b);
+            const undirected = ka < kb ? `${ka}|${kb}` : `${kb}|${ka}`;
+            const rec = edgeMap.get(undirected);
+            if (rec) rec.count += 1;
+            else edgeMap.set(undirected, { count: 1, a, b });
+        }
+    });
+
+    edgeMap.forEach(edge => {
+        if (edge.count !== 1) return;
+        const ba = vertexIndex(edge.a, false);
+        const bb = vertexIndex(edge.b, false);
+        const ta = vertexIndex(edge.a, true);
+        const tb = vertexIndex(edge.b, true);
+        indices.push(ba, bb, tb);
+        indices.push(ba, tb, ta);
+    });
+
+    if (indices.length < 3) return null;
+
+    let geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setIndex(indices);
+    // Nicht indiziert -> harte Kanten zwischen Deckfläche und Seitenwand, keine
+    // künstlich geglätteten Dreiecksflächen in der Vorschau.
+    geometry = geometry.toNonIndexed();
+    geometry.computeVertexNormals();
+    return new THREE.Mesh(geometry, material);
+}
+
 // Baut den oberen Curb-Anteil in einer geschützten Steckverbinder-Zone als
-// EINE vollständige 3D-Steckverbindung.
+// eine einzige saubere Steckverbinder-Geometrie pro Quer-Höhenlage.
 //
-// Nut/Zapfen werden zuerst über die KOMPLETTE Curb-Breite erzeugt und als
-// zusammenhängende Planform trianguliert. Erst danach werden die Dreiecke auf
-// die sechs Quer-Höhenbänder des Curbs verteilt. So bleiben auch die innen
-// liegenden Bereiche der aufgeweiteten Nut und des breiten Zapfenkopfs erhalten.
-//
-// Die Höhe ändert sich dabei ausschließlich QUER zur Fahrbahn. Zum Gegenstück
-// hin gibt es keinerlei Längs-Abflachung.
+// V8 extrudierte jedes geclippte Dreieck separat. In Kurven und an den Grenzen
+// der Querlagen entstanden dadurch überlappende Seitenflächen und sichtbare
+// Dreiecks-Artefakte. V9 sammelt die geclippten Dreiecke je Höhenlage und baut
+// daraus EIN geschlossenes Mesh. Zusätzlich wird u relativ zur echten gekrümmten
+// Mittellinie bestimmt statt mit einer einzigen globalen Normale.
 function buildCurbProtectedConnectorUpperMeshes(points, thickness, totalHeight, baseHeight, outerSign,
                                                  hasStartNotch, hasEndTab, sharedTab, material) {
     const meshes = [];
@@ -1870,7 +2091,6 @@ function buildCurbProtectedConnectorUpperMeshes(points, thickness, totalHeight, 
     const fullOffsetA = Math.min(0, dir * thickness);
     const fullOffsetB = Math.max(0, dir * thickness);
 
-    // Genau EINE vollständige Nut/Zapfen-Kontur für diese Teilung.
     const outline = buildSegmentOutline(
         points, fullOffsetA, fullOffsetB,
         hasStartNotch, hasEndTab, false, false, sharedTab
@@ -1887,18 +2107,14 @@ function buildCurbProtectedConnectorUpperMeshes(points, thickness, totalHeight, 
     }
     if (!triangles || !triangles.length) return meshes;
 
-    // Lokale Querachse der kurzen Steckverbinder-Zone.
-    const first = points[0], last = points[points.length - 1];
-    const dx = last.x - first.x, dy = last.y - first.y;
-    const dlen = Math.hypot(dx, dy) || 1;
-    const tangent = { x: dx / dlen, y: dy / dlen };
-    const normal = { x: -tangent.y, y: tangent.x };
-    const anchor = { x: (first.x + last.x) / 2, y: (first.y + last.y) / 2 };
-
-    function uAt(v) {
-        // u=0: Fahrbahnseite, u=thickness: hohe Außenseite.
-        return dir * ((v.x - anchor.x) * normal.x + (v.y - anchor.y) * normal.y);
-    }
+    const sourceTriangles = triangles.map(face => face.map(idx => {
+        const v = contour[idx];
+        return {
+            x: v.x,
+            y: v.y,
+            u: curbTransverseUAtPoint(v, points, outerSign)
+        };
+    }));
 
     const rampWidth = Math.max(thickness - CURB_STYLE.innerFlatWidthMM, thickness * 0.3);
     const stepWidth = rampWidth / CURB_STYLE.rampSteps;
@@ -1906,44 +2122,23 @@ function buildCurbProtectedConnectorUpperMeshes(points, thickness, totalHeight, 
     const stepHeight = rise / CURB_STYLE.rampSteps;
     if (stepHeight <= 1e-6) return meshes;
 
-    const tris = triangles.map(face => face.map(idx => {
-        const v = contour[idx];
-        return { x: v.x, y: v.y, u: uAt(v) };
-    }));
-
-    // Disjunkte Querbänder. Ihre Vereinigung entspricht exakt den bisherigen
-    // sechs gestuften Rampenlagen, ohne den Schwalbenschwanz selbst zu zerlegen.
+    // Gleiche NESTED-Layer-Struktur wie im normalen Curb: jede höhere Lage beginnt
+    // weiter außen, ist aber nur stepHeight dick. So stimmt der Steckverbinder exakt
+    // mit der unveränderten Curb-Querneigung überein.
     for (let step = 1; step <= CURB_STYLE.rampSteps; step++) {
-        const u0 = CURB_STYLE.innerFlatWidthMM + (step - 1) * stepWidth;
-        const u1 = (step === CURB_STYLE.rampSteps)
-            ? thickness + 1e-6
-            : CURB_STYLE.innerFlatWidthMM + step * stepWidth;
-        const upperDepth = step * stepHeight;
-        if (upperDepth <= 1e-6) continue;
+        const uMin = CURB_STYLE.innerFlatWidthMM + (step - 1) * stepWidth;
+        const uMax = thickness + 1e-5;
+        const clippedPolygons = [];
 
-        tris.forEach(tri => {
-            const clipped = clipConvexPolygonByURange(tri, u0, u1);
-            if (clipped.length < 3) return;
-
-            const clean = [];
-            clipped.forEach(v => {
-                const prev = clean[clean.length - 1];
-                if (!prev || Math.hypot(v.x - prev.x, v.y - prev.y) > 1e-7) clean.push(v);
-            });
-            if (clean.length > 2 && Math.hypot(clean[0].x - clean[clean.length - 1].x, clean[0].y - clean[clean.length - 1].y) < 1e-7) clean.pop();
-            if (clean.length < 3) return;
-
-            const shape = new THREE.Shape(clean.map(v => new THREE.Vector2(v.x, v.y)));
-            try {
-                const geometry = new THREE.ExtrudeGeometry(shape, {
-                    depth: upperDepth, bevelEnabled: false, steps: 1
-                });
-                geometry.translate(0, 0, baseHeight);
-                meshes.push(new THREE.Mesh(geometry, material));
-            } catch (err) {
-                console.error('Curb-Steckverbinder-Band übersprungen', err);
-            }
+        sourceTriangles.forEach(tri => {
+            const clipped = cleanPolygon2D(clipConvexPolygonByURange(tri, uMin, uMax));
+            if (clipped.length >= 3 && Math.abs(polygonArea2D(clipped)) > 1e-8) clippedPolygons.push(clipped);
         });
+
+        const z0 = baseHeight + (step - 1) * stepHeight;
+        const z1 = z0 + stepHeight;
+        const mesh = buildClosedExtrudedRegionMesh(clippedPolygons, z0, z1, material);
+        if (mesh) meshes.push(mesh);
     }
 
     return meshes;
@@ -2190,7 +2385,7 @@ function generate3DModel() {
     const widthInput = parseFloat((document.getElementById('trackWidth').value || '').toString().replace(',', '.'));
 
     if (!lengthInput || !widthInput || lengthInput <= 0 || widthInput <= 0) {
-        alert('Bitte gültige Streckenmaße (Länge/Breite in Metern) angeben.');
+        alert('Bitte gültige Streckenmaße (Länge/Breite in cm) angeben.');
         return;
     }
     if (paths.length === 0) {
@@ -2209,8 +2404,8 @@ function generate3DModel() {
     bedWidthMM = bedWidthInput;
     bedLengthMM = bedLengthInput;
 
-    trackLengthMM = lengthInput * 1000;
-    trackWidthMM = widthInput * 1000;
+    trackLengthMM = lengthInput * 10;
+    trackWidthMM = widthInput * 10;
 
     const elementTypeValue = document.getElementById('elementType').value;
     const profile = { ...ELEMENT_PROFILES[elementTypeValue] };
@@ -2635,7 +2830,8 @@ function downloadBlob(blob, filename) {
 // --- 12. PROJEKT SPEICHERN / LADEN (Datei) ---
 function saveProject() {
     const data = {
-        version: 1,
+        version: 2,
+        trackUnits: 'cm',
         presetFilename: currentPresetFilename,
         trackLength: document.getElementById('trackLength').value,
         trackWidth: document.getElementById('trackWidth').value,
@@ -2667,8 +2863,11 @@ function loadProjectFromFile(file) {
 }
 
 function applyProjectData(data) {
-    document.getElementById('trackLength').value = data.trackLength ?? '2.7';
-    document.getElementById('trackWidth').value = data.trackWidth ?? '1.5';
+    const storedAsCM = data.trackUnits === 'cm' || Number(data.version || 0) >= 2;
+    const storedLength = parseFloat(String(data.trackLength ?? (storedAsCM ? '270' : '2.7')).replace(',', '.'));
+    const storedWidth = parseFloat(String(data.trackWidth ?? (storedAsCM ? '150' : '1.5')).replace(',', '.'));
+    document.getElementById('trackLength').value = Number.isFinite(storedLength) ? (storedAsCM ? storedLength : storedLength * 100) : 270;
+    document.getElementById('trackWidth').value = Number.isFinite(storedWidth) ? (storedAsCM ? storedWidth : storedWidth * 100) : 150;
     document.getElementById('elementType').value = data.elementType ?? 'bande';
     document.getElementById('curbHeight').value = data.curbHeight ?? '2';
     document.getElementById('curbDepth').value = data.curbDepth ?? '20';
@@ -2687,9 +2886,13 @@ function applyProjectData(data) {
     draggingPointRef = null;
 
     if (data.presetFilename) {
-        document.getElementById('presetSelect').value = data.presetFilename;
-        loadPresetImage(data.presetFilename); // ruft redraw2DCanvas() nach dem Laden auf
+        selectPresetInUI(data.presetFilename);
+        loadPresetImage(data.presetFilename); // setzt Hersteller/Strecke, Bild und Maße
     } else {
+        const manufacturerSelect = document.getElementById('manufacturerSelect');
+        if (manufacturerSelect) manufacturerSelect.value = '';
+        populateTrackSelect('');
+        currentPresetFilename = '';
         bgImage = null;
         redraw2DCanvas();
     }
@@ -2703,6 +2906,8 @@ const AUTOSAVE_KEY = 'rcTrackBuilder_autosave';
 function autosave() {
     try {
         localStorage.setItem(AUTOSAVE_KEY, JSON.stringify({
+            version: 2,
+            trackUnits: 'cm',
             presetFilename: currentPresetFilename,
             trackLength: document.getElementById('trackLength')?.value,
             trackWidth: document.getElementById('trackWidth')?.value,

@@ -40,20 +40,25 @@
             <div class="tab-panel active" data-panel="sketch">
                 <div class="card">
                     <h3><span class="card-icon">📍</span>Strecken-Vorlage</h3>
-                    <label>Preset auswählen:</label>
-                    <select id="presetSelect">
-                        <option value="">-- Vorlage auswählen --</option>
+                    <label>Hersteller:</label>
+                    <select id="manufacturerSelect">
+                        <option value="">-- Hersteller auswählen --</option>
+                    </select>
+                    <label>Strecke:</label>
+                    <select id="presetSelect" disabled>
+                        <option value="">-- zuerst Hersteller auswählen --</option>
                     </select>
                     <div class="input-row">
                         <div>
-                            <label>Länge (m):</label>
-                            <input type="number" id="trackLength" value="2.7" step="0.01" min="0.1">
+                            <label>Länge (cm):</label>
+                            <input type="number" id="trackLength" value="270" step="0.1" min="10">
                         </div>
                         <div>
-                            <label>Breite (m):</label>
-                            <input type="number" id="trackWidth" value="1.5" step="0.01" min="0.1">
+                            <label>Breite (cm):</label>
+                            <input type="number" id="trackWidth" value="150" step="0.1" min="10">
                         </div>
                     </div>
+                    <div class="hint">Dateinamen im Ordner <strong>assets/tracks</strong>: <code>Hersteller_Strecke_Länge-Breite.webp</code>, Maße in cm. Die Dateinamen werden oben in <code>TRACK_FILES</code> in app.js eingetragen.</div>
                 </div>
 
                 <div class="card">

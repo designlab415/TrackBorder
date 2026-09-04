@@ -286,7 +286,13 @@ function redraw2DCanvas() {
     ctx2D.save();
     ctx2D.setTransform(1, 0, 0, 1, 0, 0);
     ctx2D.clearRect(0, 0, canvas2D.width, canvas2D.height);
-    ctx2D.fillStyle = '#111111';
+    // Derselbe Grauverlauf wie im 3D-Fenster (siehe createGradientBackground), damit beide
+    // Ansichten optisch zusammenpassen statt nur die 3D-Vorschau einen Verlauf zu haben.
+    const bgGrad = ctx2D.createLinearGradient(0, 0, 0, canvas2D.height);
+    bgGrad.addColorStop(0, '#6b6e75');
+    bgGrad.addColorStop(0.5, '#45474d');
+    bgGrad.addColorStop(1, '#232428');
+    ctx2D.fillStyle = bgGrad;
     ctx2D.fillRect(0, 0, canvas2D.width, canvas2D.height);
     ctx2D.restore();
 
@@ -323,7 +329,7 @@ function redraw2DCanvas() {
             ctx2D.stroke();
         }
     } else {
-        ctx2D.fillStyle = '#555555';
+        ctx2D.fillStyle = 'rgba(255,255,255,0.55)';
         ctx2D.font = '14px sans-serif';
         ctx2D.textAlign = 'center';
         ctx2D.fillText('Bitte wähle eine Strecken-Vorlage aus', canvas2D.width / 2, canvas2D.height / 2);
@@ -1350,12 +1356,31 @@ function buildSegmentOutline(centerlinePoints, offsetA, offsetB, hasStartNotch, 
 // Z = Höhe/Druckrichtung), NICHT die in Three.js sonst übliche Y-up-Konvention.
 // Dadurch entsprechen die exportierten STL-Koordinaten exakt dem, was ein Slicer
 // erwartet: Bauteil liegt flach auf der X-Y-Ebene, Höhe wächst in Z.
+// Erzeugt einen sanften Grauverlauf (dunkler unten, heller oben) als Szenen-Hintergrund -
+// über eine kleine Canvas-Textur, da THREE.Scene.background nur Vollfarben oder Texturen kennt,
+// keine CSS-artigen Verläufe direkt.
+function createGradientBackground() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 2;
+    canvas.height = 256;
+    const ctx = canvas.getContext('2d');
+    const gradient = ctx.createLinearGradient(0, 0, 0, 256);
+    gradient.addColorStop(0, '#6b6e75');
+    gradient.addColorStop(0.5, '#45474d');
+    gradient.addColorStop(1, '#232428');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, 2, 256);
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.needsUpdate = true;
+    return texture;
+}
+
 function init3DScene() {
     const container = document.getElementById('threeContainer');
     if (!container || typeof THREE === 'undefined') return;
 
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x101010);
+    scene.background = createGradientBackground();
 
     camera = new THREE.PerspectiveCamera(45, container.clientWidth / (container.clientHeight || 1), 1, 20000);
     camera.up.set(0, 0, 1);
@@ -1485,7 +1510,11 @@ const CURB_STYLE = {
     colors: [0xd93a2b, 0xf0f0f0], // Rot / Weiß, alternierend
     baseHeightRatio: 0.5,         // Anteil der Gesamthöhe für die tragende Basis (trägt die Zunge/Nut)
     rampSteps: 3,                 // zusätzliche Stufen von der Fahrbahnseite (flach) zur Außenseite (hoch)
-    innerFlatWidthMM: 2           // Breite ab der Skizzenlinie, die dauerhaft nur Basishöhe hat (0 Stufen)
+    innerFlatWidthMM: 2,          // Breite ab der Skizzenlinie, die dauerhaft nur Basishöhe hat (0 Stufen)
+    rumbleEnabled: true,          // periodische flache Riefen quer zur Breite für haptisches Feedback
+    rumbleLengthMM: 12,           // Länge eines Riefen-Zyklus (Feld + Lücke)
+    rumbleHeightMM: 0.4,          // wie hoch die Riefe übersteht - bewusst flach gehalten
+    rumbleColor: 0x555555         // dezentes Grau, unabhängig vom Rot/Weiß-Streifenmuster
 };
 
 // Teilt eine Punktreihe in kurze, etwa gleich lange Abschnitte (für die Rot/Weiß-Streifen).
@@ -1541,23 +1570,50 @@ function buildCurbRampMeshes(localChunk, thickness, totalHeight, baseHeight, out
             const outerBoundary = dir * thickness;
             const offsetA = Math.min(innerBoundary, outerBoundary);
             const offsetB = Math.max(innerBoundary, outerBoundary);
+            const zOffset = baseHeight + (step - 1) * stepHeight;
 
-            // sharedTab statt eigener Berechnung je Stufe: dadurch sitzt die Zunge/Nut bei
-            // Basis UND allen Rampenstufen an derselben Stelle mit derselben Größe - eine
-            // durchgehende Steckverbindung statt vieler kleiner, versetzter Zacken.
-            const outline = buildSegmentOutline(stripePts, offsetA, offsetB, stripeHasStartNotch, stripeHasEndTab, roundStart, roundEnd, sharedTab);
-            if (outline.length < 3) continue;
-
-            const shape = new THREE.Shape(outline.map(p => new THREE.Vector2(p.x, p.y)));
-            let geometry;
-            try {
-                geometry = new THREE.ExtrudeGeometry(shape, { depth: stepHeight, bevelEnabled: false, steps: 1 });
-            } catch (err) {
-                console.error('Curb-Rampenstufe übersprungen (ungültige Geometrie)', err);
+            if (!CURB_STYLE.rumbleEnabled) {
+                // sharedTab statt eigener Berechnung je Stufe: dadurch sitzt die Zunge/Nut bei
+                // Basis UND allen Rampenstufen an derselben Stelle mit derselben Größe.
+                const outline = buildSegmentOutline(stripePts, offsetA, offsetB, stripeHasStartNotch, stripeHasEndTab, roundStart, roundEnd, sharedTab);
+                if (outline.length < 3) continue;
+                const shape = new THREE.Shape(outline.map(p => new THREE.Vector2(p.x, p.y)));
+                try {
+                    const geometry = new THREE.ExtrudeGeometry(shape, { depth: stepHeight, bevelEnabled: false, steps: 1 });
+                    geometry.translate(0, 0, zOffset);
+                    meshes.push(new THREE.Mesh(geometry, material));
+                } catch (err) {
+                    console.error('Curb-Rampenstufe übersprungen (ungültige Geometrie)', err);
+                }
                 continue;
             }
-            geometry.translate(0, 0, baseHeight + (step - 1) * stepHeight);
-            meshes.push(new THREE.Mesh(geometry, material));
+
+            // Riefen für haptisches Feedback: die Stufe wird zusätzlich in kurze Abschnitte
+            // unterteilt, die abwechselnd normal hoch und um rumbleHeightMM höher sind - IMMER
+            // mit derselben Breite/Position wie diese Stufe UND derselben Streifenfarbe. Dadurch
+            // folgen die Riefen exakt der Treppen-/Schrägform (keine schwebende Platte mehr) und
+            // unterbrechen das Rot/Weiß-Muster nicht.
+            const rumbleSegs = splitIntoStripes(stripePts, CURB_STYLE.rumbleLengthMM);
+            rumbleSegs.forEach((segPts, si) => {
+                if (segPts.length < 2) return;
+                const segHasStartNotch = si === 0 && stripeHasStartNotch;
+                const segHasEndTab = si === rumbleSegs.length - 1 && stripeHasEndTab;
+                const segRoundStart = si === 0 && roundStart;
+                const segRoundEnd = si === rumbleSegs.length - 1 && roundEnd;
+                const isRidge = si % 2 === 0;
+                const segHeight = stepHeight + (isRidge ? CURB_STYLE.rumbleHeightMM : 0);
+
+                const outline = buildSegmentOutline(segPts, offsetA, offsetB, segHasStartNotch, segHasEndTab, segRoundStart, segRoundEnd, sharedTab);
+                if (outline.length < 3) return;
+                const shape = new THREE.Shape(outline.map(p => new THREE.Vector2(p.x, p.y)));
+                try {
+                    const geometry = new THREE.ExtrudeGeometry(shape, { depth: segHeight, bevelEnabled: false, steps: 1 });
+                    geometry.translate(0, 0, zOffset);
+                    meshes.push(new THREE.Mesh(geometry, material));
+                } catch (err) {
+                    console.error('Curb-Riefen-Segment übersprungen (ungültige Geometrie)', err);
+                }
+            });
         }
     });
 
@@ -1568,6 +1624,7 @@ function buildCurbRampMeshes(localChunk, thickness, totalHeight, baseHeight, out
 // symmetrisch zentrierte Stufen, die von der vollen Breite unten zur schmaleren Oberkante oben
 // abnehmen. Jede Stufe trägt ihre eigene Zunge/Nut, dadurch ist die Steckverbindung wie beim
 // Curb über die gesamte Höhe durchgängig, nicht nur an der Basis.
+
 function buildBandeMeshes(localChunk, thickness, totalHeight, hasStartNotch, hasEndTab, roundStart, roundEnd, color) {
     const meshes = [];
     const layers = getBandeLayers();
@@ -1873,7 +1930,7 @@ async function exportColored3MF() {
 
         let objectsXML = '';
         let itemsXML = '';
-        let objectId = 2; // 1 ist konventionell für die Material-Resource reserviert
+        let objectId = 2; // 1 ist für die Farb-Resource reserviert
 
         const v = new THREE.Vector3();
 
@@ -1895,18 +1952,25 @@ async function exportColored3MF() {
                     verticesXML += `<vertex x="${v.x.toFixed(4)}" y="${v.y.toFixed(4)}" z="${v.z.toFixed(4)}"/>`;
                 }
 
+                // WICHTIG: Farbe wird pro DREIECK über pid/p1 auf die m:colorgroup gesetzt
+                // ("Face Coloring") statt nur einmal auf das <object> - laut BambuStudio-Wiki
+                // werden nur Vertex- oder Face-Coloring automatisch erkannt, ein reines
+                // objektweites <basematerials>-pid wird von BambuStudio ignoriert (bleibt grau),
+                // auch wenn Windows' eigener 3D-Viewer (breiterer 3MF-Support) es korrekt zeigt.
                 let trianglesXML = '';
                 const index = geometry.index;
                 if (index) {
                     for (let i = 0; i < index.count; i += 3) {
-                        trianglesXML += `<triangle v1="${index.getX(i)}" v2="${index.getX(i + 1)}" v3="${index.getX(i + 2)}"/>`;
+                        trianglesXML += `<triangle v1="${index.getX(i)}" v2="${index.getX(i + 1)}" v3="${index.getX(i + 2)}" pid="1" p1="${matIdx}"/>`;
                     }
                 } else {
                     for (let i = 0; i < posAttr.count; i += 3) {
-                        trianglesXML += `<triangle v1="${i}" v2="${i + 1}" v3="${i + 2}"/>`;
+                        trianglesXML += `<triangle v1="${i}" v2="${i + 1}" v3="${i + 2}" pid="1" p1="${matIdx}"/>`;
                     }
                 }
 
+                // pid/pindex auch auf Objekt-Ebene mitgeben (Fallback für Programme, die nur
+                // objektweite Farbe lesen, z.B. Windows 3D-Viewer / manche CAD-Importer).
                 objectsXML += `<object id="${objectId}" type="model" pid="1" pindex="${matIdx}"><mesh><vertices>${verticesXML}</vertices><triangles>${trianglesXML}</triangles></mesh></object>`;
                 itemsXML += `<item objectid="${objectId}"/>`;
                 objectId++;
@@ -1918,12 +1982,15 @@ async function exportColored3MF() {
             return;
         }
 
-        const materialsXML = colorList.map(c => `<base name="c" displaycolor="${c}FF"/>`).join('');
+        // m:colorgroup (Materials & Properties Extension) statt/zusätzlich zu <basematerials> -
+        // das ist der Mechanismus, den BambuStudio/OrcaSlicer für automatische Farberkennung
+        // beim 3MF-Import tatsächlich auswerten.
+        const colorGroupXML = colorList.map(c => `<m:color color="${c}FF"/>`).join('');
 
         const modelXML = `<?xml version="1.0" encoding="UTF-8"?>
-<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:m="http://schemas.microsoft.com/3dmanufacturing/material/2015/02">
 <resources>
-<basematerials id="1">${materialsXML}</basematerials>
+<m:colorgroup id="1">${colorGroupXML}</m:colorgroup>
 ${objectsXML}
 </resources>
 <build>${itemsXML}</build>

@@ -18,9 +18,19 @@ const PRESET_FILES = [
 ];
 
 // Druckbett-Limit (mm). EFFECTIVE_MAX ist der Sicherheitsabstand darunter.
-const MAX_SEGMENT_LENGTH_MM = 250;
+// Druckbett-Maße (mm) - vom Nutzer im Tab "Bauteil" festgelegt (Pflichtangabe vor dem
+// Generieren). Ersetzen die früher feste 250x250mm-Annahme, damit unterschiedliche Drucker
+// unterstützt werden. Defaults hier nur für die Anzeige, bevor der Nutzer etwas eingibt.
+let bedWidthMM = 250;
+let bedLengthMM = 250;
 const SEGMENT_MARGIN_MM = 8;
-const EFFECTIVE_MAX_LENGTH_MM = MAX_SEGMENT_LENGTH_MM - SEGMENT_MARGIN_MM;
+
+// Segmente dürfen höchstens so lang sein, dass sie garantiert auf eine Druckplatte passen -
+// dafür wird die KLEINERE der beiden Plattenmaße herangezogen (unabhängig von der Ausrichtung
+// eines Teils auf der Platte).
+function getEffectiveSegmentLength() {
+    return Math.max(Math.min(bedWidthMM, bedLengthMM) - SEGMENT_MARGIN_MM, 20);
+}
 const RESAMPLE_STEP_MM = 2; // Auflösung der Mittellinie für glattere Kurven
 
 // Profile je Element-Typ (Höhe/Breite in mm, Farbe für die 3D-Vorschau) - Standardwerte,
@@ -29,7 +39,7 @@ const RESAMPLE_STEP_MM = 2; // Auflösung der Mittellinie für glattere Kurven
 // bleiben RC-Fahrzeuge mit niedriger Bodenfreiheit am Curb hängen.
 const ELEMENT_PROFILES = {
     bande: { height: 20, thickness: 13, color: 0xb8b8b8, label: "Bande" },
-    curb:  { height: 2,  thickness: 20, color: 0xff5533, label: "Curb" }
+    curb:  { height: 2,  thickness: 20, color: 0xf0f0f0, label: "Curb" }
 };
 
 // Bande-Optik: gestufte, sich nach oben verjüngende Form wie eine Beton-Leitwand (NORDBETON-
@@ -79,18 +89,32 @@ function getBandeLayers() {
 
 // Schwalbenschwanz / Puzzle-Zunge (mm)
 const DOVETAIL = {
-    tabLength: 5,          // wie weit die Zunge über das Segmentende hinausragt
+    flareAngleDeg: 60,     // Flankenwinkel der Zunge, gemessen von der Breitenachse (quer zur
+                            // Länge) - Vorgabe des Nutzers. Bleibt bei jeder Bauteilgröße exakt
+                            // gleich (Winkel sind skalierungsunabhängig) - die Länge der Zunge
+                            // ergibt sich daraus automatisch aus der (mitskalierenden) Breite.
     marginRatio: 1 / 3,    // Anteil der GESAMTBREITE, der links+rechts als Restwand stehen bleibt
                             // (zusammen) - die restlichen 2/3 sind die Zunge an ihrer breitesten
                             // Stelle. Skaliert dadurch automatisch mit der Bauteilbreite (schmale
                             // Bande -> kleine Zunge, breiter Curb -> kräftige Zunge), statt eines
                             // festen mm-Werts.
-    tabFlareRatio: 0.16,   // wie viel schmaler die Zungen-BASIS gegenüber der Spitze ist, ebenfalls
-                            // relativ zur Bauteilbreite (sorgt für die Trapez-/Schwalbenschwanz-Form)
-    clearance: 0.2,         // Durchgängiger Spalt zwischen Zunge und Nut (mm) für sauberen Sitz nach dem Druck
-    minWallMM: 1.0          // Mindest-Restwandstärke außen um die Nut - bei zu dünnen Bauteilen
+    tabBaseRatio: 0.5,     // Breite der Zungenbasis relativ zur Spitzenbreite (0.5 = Basis ist
+                            // halb so breit wie die Spitze) - zusammen mit dem Winkel bestimmt das
+                            // die Zungenlänge.
+    clearance: 0.2,         // Durchgängiger, ÜBERALL entlang der Zungenkontur gleich großer Spalt
+                            // (mm) zwischen Zunge und Nut - auch an den schrägen Flanken, nicht
+                            // nur bei Breite/Tiefe einzeln (siehe computeNotchGeometry).
+    minWallMM: 1.0,         // Mindest-Restwandstärke außen um die Nut - bei zu dünnen Bauteilen
                              // (schmale Bande, flacher Curb) wird die Zunge automatisch verkleinert
                              // oder (wenn selbst das nicht reicht) ganz weggelassen, um Bruch zu vermeiden.
+    notchHeightMM: 5,       // Feste Z-Höhe (Bauteilhöhe), bis zu der die NUT geschnitten wird -
+                             // unabhängig von der Gesamthöhe des Bauteils. Bei Curb (Gesamthöhe
+                             // meist < 5mm) deckt das automatisch die komplette Höhe ab; bei der
+                             // deutlich höheren Bande begrenzt das den Schwalbenschwanz bewusst
+                             // auf den unteren Bereich, statt durch die volle Höhe zu gehen.
+    tabHeightMM: 4           // Feste Z-Höhe des außen angesetzten ZAPFENS (Gegenstück zur Nut) -
+                             // bewusst etwas niedriger als notchHeightMM, damit der Zapfen mit
+                             // Spiel in der Nut sitzt.
 };
 
 let bgImage = null;
@@ -483,11 +507,15 @@ function updateOuterSideToggleLabel() {
 function updateElementDimsVisibility() {
     const curbRow = document.getElementById('curbDimsRow');
     const bandeRow = document.getElementById('bandeDimsRow');
+    const curbSlopeRow = document.getElementById('curbSlopeRow');
+    const curbSlopeHint = document.getElementById('curbSlopeHint');
     const select = document.getElementById('elementType');
     if (!select) return;
     const isCurb = select.value === 'curb';
     if (curbRow) curbRow.style.display = isCurb ? 'flex' : 'none';
     if (bandeRow) bandeRow.style.display = isCurb ? 'none' : 'flex';
+    if (curbSlopeRow) curbSlopeRow.style.display = isCurb ? 'flex' : 'none';
+    if (curbSlopeHint) curbSlopeHint.style.display = isCurb ? 'block' : 'none';
 }
 
 function updateSketchStatus() {
@@ -1133,6 +1161,47 @@ function offsetPoint(p, dir, amount) {
     return { x: p.x + dir.x * amount, y: p.y + dir.y * amount };
 }
 
+// Schneidet aus einer Punktreihe den Abschnitt zwischen zwei Bogenlängen [dStart, dEnd] heraus
+// (0 <= dStart <= dEnd <= Gesamtlänge von points), inklusive exakt interpolierter Randpunkte an
+// den beiden Schnittstellen (falls diese nicht ohnehin genau auf einen vorhandenen Punkt fallen).
+// Wird für die Neigungs-Rampe an den Curb-Segmentenden gebraucht (buildCurbRampMeshes), um dort
+// unabhängig von der Rot/Weiß-Streifen-Einteilung feine Längs-Scheiben herauszuschneiden.
+function sliceByArcLength(points, dStart, dEnd) {
+    if (points.length < 2 || dEnd - dStart < 1e-6) return [];
+    const result = [];
+    let acc = 0;
+    for (let i = 1; i < points.length; i++) {
+        const p0 = points[i - 1], p1 = points[i];
+        const segLen = dist(p0, p1);
+        if (segLen < 1e-9) continue;
+        const segStartD = acc;
+        const segEndD = acc + segLen;
+
+        if (result.length === 0) {
+            if (segStartD >= dStart - 1e-6) {
+                result.push(p0);
+            } else if (segEndD > dStart) {
+                const t = (dStart - segStartD) / segLen;
+                result.push({ x: p0.x + (p1.x - p0.x) * t, y: p0.y + (p1.y - p0.y) * t });
+            }
+        }
+
+        if (result.length > 0) {
+            if (segEndD <= dEnd + 1e-6) {
+                result.push(p1);
+            } else {
+                const t = (dEnd - segStartD) / segLen;
+                result.push({ x: p0.x + (p1.x - p0.x) * t, y: p0.y + (p1.y - p0.y) * t });
+                break;
+            }
+        }
+
+        acc = segEndD;
+        if (acc >= dEnd - 1e-6) break;
+    }
+    return result;
+}
+
 // Erzeugt eine halbrunde Kappe zwischen zwei Kantenpunkten (fromOffset -> toOffset, quer zur
 // Strangrichtung), die nach außen (outwardDir) wölbt - für abgerundete Curb-Enden statt eines
 // geraden Abschlusses. Reihenfolge fromOffset->toOffset bestimmt die Umlaufrichtung des Polygons
@@ -1204,7 +1273,7 @@ function splitPathIntoSegments(pathPointsFrac) {
 
     for (let i = 1; i < dense.length; i++) {
         const segLen = dist(dense[i - 1], dense[i]);
-        if (currentLen + segLen > EFFECTIVE_MAX_LENGTH_MM && currentChunk.length > 1) {
+        if (currentLen + segLen > getEffectiveSegmentLength() && currentChunk.length > 1) {
             chunks.push(currentChunk);
             currentChunk = [dense[i - 1]]; // nahtloser Übergang: Startpunkt = letzter Endpunkt
             currentLen = 0;
@@ -1220,24 +1289,67 @@ function splitPathIntoSegments(pathPointsFrac) {
 // unter Einhaltung der Mindestwandstärke (DOVETAIL.minWallMM). Skaliert proportional mit der
 // Bauteilbreite (1/3 Rand gesamt, 2/3 Zunge an der Spitze) - possible=false, wenn selbst eine
 // minimale Zunge nicht ohne Bruchgefahr reinpasst.
+// Berechnet Zapfen-Maße (Basis-/Spitzenhalbbreite UND Länge) für eine gegebene Querschnitts-
+// Halbbreite. Die Länge wird aus dem festen Flankenwinkel (DOVETAIL.flareAngleDeg) und der
+// (Basis-/Spitzenbreiten-)Differenz abgeleitet, NICHT fest vorgegeben - dadurch bleibt der
+// Winkel bei jeder Bauteilgröße exakt 60°, während alle Längenmaße mit der Bauteilbreite
+// mitskalieren. possible=false, wenn selbst eine minimale Zunge nicht ohne Bruchgefahr reinpasst.
 function computeTabSize(halfWidth) {
     const clearance = DOVETAIL.clearance;
+    // WICHTIG: Der Winkel wird von der BREITENACHSE (quer zur Längsrichtung) aus gemessen, nicht
+    // von der Längsachse - genau wie in der Nutzer-Zeichnung. Bei 60° bedeutet das: tabLength =
+    // Δ(Halbbreite) * tan(60°) [nicht geteilt!]. Mit den Beispielwerten der Zeichnung (Δ=4mm,
+    // Länge=6mm bei 20mm Bauteilbreite) passt das: atan(6/4) ≈ 56°, nah an 60° (Rest ist übliche
+    // Mess-Ungenauigkeit aus einem Foto).
+    const tanAngle = Math.tan(DOVETAIL.flareAngleDeg * Math.PI / 180);
 
-    // Zunge nimmt proportional (1 - marginRatio) der Breite ein, unabhängig von der absoluten
-    // Bauteilgröße - dadurch wird sie bei einem breiten Curb automatisch kräftiger als bei einer
-    // schmalen Bande, statt an einem festen mm-Wert gedeckelt zu sein.
     let tabTipHalf = halfWidth * (1 - DOVETAIL.marginRatio);
-    let tabHalf = tabTipHalf - halfWidth * DOVETAIL.tabFlareRatio;
+    let tabHalf = tabTipHalf * DOVETAIL.tabBaseRatio;
+    let tabLength = (tabTipHalf - tabHalf) * tanAngle;
 
     // Mindestwandstärke sicherstellen (Bruchgefahr bei zu dünnem Restmaterial) - wenn die
-    // proportionale Zunge das verletzen würde, wird sie so weit verkleinert, wie nötig.
+    // proportionale Zunge das verletzen würde, werden Basis/Spitze/Länge GEMEINSAM im gleichen
+    // Verhältnis verkleinert, damit der Flankenwinkel dabei exakt 60° bleibt.
     const maxAllowedTipHalf = halfWidth - DOVETAIL.minWallMM - clearance;
-    if (maxAllowedTipHalf < 0.6) return { possible: false, tabHalf: 0, tabTipHalf: 0 };
-    if (tabTipHalf > maxAllowedTipHalf) tabTipHalf = maxAllowedTipHalf;
-    if (tabHalf > tabTipHalf - 0.3) tabHalf = tabTipHalf - 0.3;
-    if (tabHalf < 0.3) tabHalf = tabTipHalf * 0.5;
+    if (maxAllowedTipHalf < 0.6) return { possible: false, tabHalf: 0, tabTipHalf: 0, tabLength: 0 };
+    if (tabTipHalf > maxAllowedTipHalf) {
+        const scale = maxAllowedTipHalf / tabTipHalf;
+        tabTipHalf = maxAllowedTipHalf;
+        tabHalf *= scale;
+        tabLength *= scale;
+    }
+    if (tabHalf < 0.3) { tabHalf = 0.3; tabLength = (tabTipHalf - tabHalf) * tanAngle; }
 
-    return { possible: true, tabHalf, tabTipHalf };
+    return { possible: true, tabHalf, tabTipHalf, tabLength };
+}
+
+// Berechnet die Eckpunkte der NUT (Öffnungsbreite, Grundbreite, Tiefe) mit einem WIRKLICH
+// gleichmäßigen senkrechten Abstand (clearance) zur Zungen-Kontur entlang der GESAMTEN Flanke -
+// nicht nur Breite und Tiefe getrennt aufaddiert (das ergäbe an der schrägen Flanke einen
+// ungleichmäßigen, meist zu kleinen Spalt). Echter Polygon-Versatz mit Gehrungs-Ecke am
+// Taschengrund. Arbeitet in einer (Länge=l, Breite=w)-Ebene, eine Seite (+w); die andere Seite
+// wird beim Aufruf gespiegelt.
+function computeNotchGeometry(tabHalf, tabTipHalf, tabLength, clearance) {
+    const A = { l: 0, w: tabHalf };            // Zungenbasis, an der Oberfläche
+    const B = { l: tabLength, w: tabTipHalf };  // Zungenspitze, tief im Material
+
+    const rawDir = { l: B.l - A.l, w: B.w - A.w };
+    const len = Math.hypot(rawDir.l, rawDir.w) || 1;
+    const dir = { l: rawDir.l / len, w: rawDir.w / len };
+    // Normale, die nach AUSSEN zeigt (weg von der Zungenmitte, d.h. Nut wird größer/breiter)
+    const normal = { l: -dir.w, w: dir.l };
+
+    const A_off = { l: A.l + normal.l * clearance, w: A.w + normal.w * clearance };
+    const bottomL = tabLength + clearance;
+
+    // Schnittpunkt der versetzten Flanke mit der (ebenfalls versetzten) Bodenlinie l=bottomL
+    // bzw. mit der Oberfläche l=0 -> korrekte Gehrungs-Ecken der vergrößerten Tasche.
+    const tBottom = (bottomL - A_off.l) / dir.l;
+    const bottomW = A_off.w + tBottom * dir.w;
+    const tMouth = (0 - A_off.l) / dir.l;
+    const mouthW = A_off.w + tMouth * dir.w;
+
+    return { mouthHalf: mouthW, bottomHalf: bottomW, depth: bottomL };
 }
 
 // Baut die 2D-Umriss-Punkte (mm) eines Segments inkl. Zunge (Ende) / Nut (Anfang).
@@ -1276,16 +1388,47 @@ function buildSegmentOutline(centerlinePoints, offsetA, offsetB, hasStartNotch, 
     // selbst das nicht (extrem dünnes Bauteil), fällt die Steckverbindung ganz weg (gerader Stoß).
     const clearance = DOVETAIL.clearance;
 
-    let tabHalf, tabTipHalf, dovetailPossible, tabCenterOffset;
+    let tabHalf, tabTipHalf, tabLength, dovetailPossible, tabCenterOffset;
     if (tabOverride) {
         tabHalf = tabOverride.tabHalf;
         tabTipHalf = tabOverride.tabTipHalf;
+        tabLength = tabOverride.tabLength;
         dovetailPossible = tabOverride.possible;
         tabCenterOffset = tabOverride.anchorOffset;
+
+        // Die EINE, gemeinsame Zunge wird von der vollen Bauteilbreite (Basis) abgeleitet und
+        // soll unverändert durch JEDE Schicht durchgezogen werden. Passt sie in dieser (ggf.
+        // schmaleren) Schicht nicht mehr hinein, würde ein direktes Anwenden zu einer
+        // selbstüberschneidenden (kaputten, unsichtbaren) Kontur führen. Deshalb hier zuerst
+        // versuchen, sie nur seitlich zu verschieben (Größe bleibt exakt erhalten); reicht auch
+        // das nicht, wird sie GRÖSSENMÄSSIG (Winkel bleibt exakt 60°) auf die eigene
+        // Schichtbreite heruntergerechnet - so bleibt in JEDER Schicht eine gültige, wenn auch
+        // ggf. dünne Zunge/Nut erhalten, statt dass die Schicht komplett ohne Verbindung bleibt.
+        if (dovetailPossible) {
+            const reach = tabTipHalf + clearance;
+            const layerWidth = offsetB - offsetA;
+            if (layerWidth < 2 * reach + 0.01) {
+                const resized = computeTabSize(layerWidth / 2);
+                if (resized.possible) {
+                    tabHalf = resized.tabHalf;
+                    tabTipHalf = resized.tabTipHalf;
+                    tabLength = resized.tabLength;
+                    tabCenterOffset = ownCenterOffset;
+                } else {
+                    dovetailPossible = false;
+                }
+            } else {
+                const minCenter = offsetA + reach;
+                const maxCenter = offsetB - reach;
+                if (tabCenterOffset < minCenter) tabCenterOffset = minCenter;
+                else if (tabCenterOffset > maxCenter) tabCenterOffset = maxCenter;
+            }
+        }
     } else {
         const size = computeTabSize(halfWidth);
         tabHalf = size.tabHalf;
         tabTipHalf = size.tabTipHalf;
+        tabLength = size.tabLength;
         dovetailPossible = size.possible;
         tabCenterOffset = ownCenterOffset;
     }
@@ -1309,16 +1452,14 @@ function buildSegmentOutline(centerlinePoints, offsetA, offsetB, hasStartNotch, 
     } else {
         outline.push(edgeA[0]);
         if (effStartNotch) {
-            // Tasche verjüngt sich zur Öffnung hin (mouthHalf, schmal) und ist am Grund
-            // (bottomHalf, breit) am weitesten - exakt das Gegenstück zur Zunge, die an
-            // ihrer Basis schmal ist und zur Spitze hin ausflammt (tabHalf -> tabTipHalf).
-            const depth = DOVETAIL.tabLength + clearance;
-            const mouthHalf = tabHalf + clearance;
-            const bottomHalf = tabTipHalf + clearance;
-            outline.push(offsetPoint(startTabCenter, startNormal, -mouthHalf));
-            outline.push(offsetPoint(offsetPoint(startTabCenter, startNormal, -bottomHalf), startTangent, depth));
-            outline.push(offsetPoint(offsetPoint(startTabCenter, startNormal, bottomHalf), startTangent, depth));
-            outline.push(offsetPoint(startTabCenter, startNormal, mouthHalf));
+            // Nut über echten Konturversatz berechnet (siehe computeNotchGeometry) - garantiert
+            // überall entlang der Flanke denselben senkrechten 0,2mm-Spalt zur Zunge, nicht nur
+            // bei Breite und Tiefe getrennt.
+            const notch = computeNotchGeometry(tabHalf, tabTipHalf, tabLength, clearance);
+            outline.push(offsetPoint(startTabCenter, startNormal, -notch.mouthHalf));
+            outline.push(offsetPoint(offsetPoint(startTabCenter, startNormal, -notch.bottomHalf), startTangent, notch.depth));
+            outline.push(offsetPoint(offsetPoint(startTabCenter, startNormal, notch.bottomHalf), startTangent, notch.depth));
+            outline.push(offsetPoint(startTabCenter, startNormal, notch.mouthHalf));
         }
         outline.push(edgeB[0]);
     }
@@ -1338,8 +1479,8 @@ function buildSegmentOutline(centerlinePoints, offsetA, offsetB, hasStartNotch, 
     } else {
         if (effEndTab) {
             outline.push(offsetPoint(endTabCenter, endNormal, tabHalf));
-            outline.push(offsetPoint(offsetPoint(endTabCenter, endNormal, tabTipHalf), endTangent, DOVETAIL.tabLength));
-            outline.push(offsetPoint(offsetPoint(endTabCenter, endNormal, -tabTipHalf), endTangent, DOVETAIL.tabLength));
+            outline.push(offsetPoint(offsetPoint(endTabCenter, endNormal, tabTipHalf), endTangent, tabLength));
+            outline.push(offsetPoint(offsetPoint(endTabCenter, endNormal, -tabTipHalf), endTangent, tabLength));
             outline.push(offsetPoint(endTabCenter, endNormal, -tabHalf));
         }
         outline.push(edgeA[n - 1]);
@@ -1399,26 +1540,9 @@ function init3DScene() {
     dirLight.position.set(-200, -300, 500);
     scene.add(dirLight);
 
-    // Druckbett-Platte (250x250mm), liegt flach in der X-Y-Ebene bei Z=0 und beginnt
-    // bei (0,0) - genau dort, wo auch die generierten Segmente angeordnet werden.
-    const bedGeo = new THREE.PlaneGeometry(MAX_SEGMENT_LENGTH_MM, MAX_SEGMENT_LENGTH_MM);
-    const bedMat = new THREE.MeshStandardMaterial({ color: 0x3a3a3a, side: THREE.DoubleSide, roughness: 0.9 });
-    const bedMesh = new THREE.Mesh(bedGeo, bedMat);
-    bedMesh.position.set(MAX_SEGMENT_LENGTH_MM / 2, MAX_SEGMENT_LENGTH_MM / 2, 0);
-    scene.add(bedMesh);
-
-    const bedEdges = new THREE.LineSegments(
-        new THREE.EdgesGeometry(bedGeo),
-        new THREE.LineBasicMaterial({ color: 0x00adb5 })
-    );
-    bedEdges.position.copy(bedMesh.position);
-    bedEdges.position.z = 0.4;
-    scene.add(bedEdges);
-
-    const grid = new THREE.GridHelper(MAX_SEGMENT_LENGTH_MM, 25, 0x00adb5, 0x555555);
-    grid.rotation.x = Math.PI / 2; // Grid liegt standardmäßig in der XZ-Ebene -> in XY-Ebene drehen
-    grid.position.set(MAX_SEGMENT_LENGTH_MM / 2, MAX_SEGMENT_LENGTH_MM / 2, 0.2);
-    scene.add(grid);
+    // Druckbett-Platte(n) - werden dynamisch erzeugt (siehe rebuildBedVisuals), da Größe und
+    // Anzahl vom Nutzer festgelegte Werte sind, die sich nach jedem Generieren ändern können.
+    rebuildBedVisuals(1);
 
     trackGroup = new THREE.Group();
     scene.add(trackGroup);
@@ -1431,6 +1555,58 @@ function init3DScene() {
         camera.updateProjectionMatrix();
         renderer.setSize(w, h);
     });
+}
+
+let bedGroup = null;
+const PLATE_GAP_MM = 80; // sichtbarer Abstand zwischen mehreren Druckplatten in der Vorschau
+
+// Baut die Visualisierung EINER Druckplatte (Fläche + Kontur + Raster) an der Position, die
+// dieser Plattenindex im nebeneinander aufgereihten Mehrplatten-Layout einnimmt.
+function createPlateVisual(index) {
+    const group = new THREE.Group();
+    const offsetX = index * (bedWidthMM + PLATE_GAP_MM);
+
+    const bedGeo = new THREE.PlaneGeometry(bedWidthMM, bedLengthMM);
+    const bedMat = new THREE.MeshStandardMaterial({ color: 0x3a3a3a, side: THREE.DoubleSide, roughness: 0.9 });
+    const bedMesh = new THREE.Mesh(bedGeo, bedMat);
+    bedMesh.position.set(offsetX + bedWidthMM / 2, bedLengthMM / 2, 0);
+    group.add(bedMesh);
+
+    const bedEdges = new THREE.LineSegments(
+        new THREE.EdgesGeometry(bedGeo),
+        new THREE.LineBasicMaterial({ color: 0x00adb5 })
+    );
+    bedEdges.position.copy(bedMesh.position);
+    bedEdges.position.z = 0.4;
+    group.add(bedEdges);
+
+    const gridSize = Math.max(bedWidthMM, bedLengthMM);
+    const grid = new THREE.GridHelper(gridSize, 25, 0x00adb5, 0x555555);
+    grid.scale.set(bedWidthMM / gridSize, 1, bedLengthMM / gridSize); // auf Rechteck stauchen
+    grid.rotation.x = Math.PI / 2; // Grid liegt standardmäßig in der XZ-Ebene -> in XY-Ebene drehen
+    grid.position.set(offsetX + bedWidthMM / 2, bedLengthMM / 2, 0.2);
+    group.add(grid);
+
+    return group;
+}
+
+// Löscht die alte(n) Druckplatten-Visualisierung(en) und baut plateCount neue, nebeneinander
+// aufgereihte Platten in aktueller Größe/Anzahl auf.
+function rebuildBedVisuals(plateCount) {
+    if (!bedGroup) {
+        bedGroup = new THREE.Group();
+        scene.add(bedGroup);
+    }
+    while (bedGroup.children.length) {
+        const child = bedGroup.children.pop();
+        child.traverse(n => {
+            if (n.geometry) n.geometry.dispose();
+            if (n.material) n.material.dispose();
+        });
+    }
+    for (let i = 0; i < plateCount; i++) {
+        bedGroup.add(createPlateVisual(i));
+    }
 }
 
 function animate3D() {
@@ -1455,9 +1631,13 @@ function clearGeneratedMeshes() {
 function fitCameraToScene() {
     if (!trackGroup) return;
     const box = new THREE.Box3().setFromObject(trackGroup);
-    // Druckbett (0..250 / 0..250) immer mit ins Bild nehmen, auch wenn die Segmente kleiner sind
-    box.expandByPoint(new THREE.Vector3(0, 0, 0));
-    box.expandByPoint(new THREE.Vector3(MAX_SEGMENT_LENGTH_MM, MAX_SEGMENT_LENGTH_MM, 0));
+    // Alle Druckplatten immer mit ins Bild nehmen, auch wenn die Segmente kleiner sind
+    if (bedGroup && bedGroup.children.length) {
+        box.union(new THREE.Box3().setFromObject(bedGroup));
+    } else {
+        box.expandByPoint(new THREE.Vector3(0, 0, 0));
+        box.expandByPoint(new THREE.Vector3(bedWidthMM, bedLengthMM, 0));
+    }
     if (box.isEmpty()) return;
 
     const size = box.getSize(new THREE.Vector3());
@@ -1468,36 +1648,50 @@ function fitCameraToScene() {
     controls.update();
 }
 
-// Einfaches "Regal"-Layout: platziert generierte Segmente lückenlos nebeneinander/
-// zeilenweise, damit sie sich in der Vorschau nicht überlappen und gut mit der
-// 250x250mm-Platte vergleichbar sind. Kein echtes Nesting/Optimierung.
+// Einfaches "Regal"-Layout: platziert generierte Segmente lückenlos nebeneinander/zeilenweise.
+// Passt eine Zeile nicht mehr auf die aktuelle Platte (Höhe überschritten), wird automatisch
+// eine neue Druckplatte begonnen (nebeneinander in der Vorschau, siehe createPlateVisual).
+// Kein echtes Nesting/Optimierung, nur ein zeilenweises Regal je Platte.
 let layoutCursorX = 0;
 let layoutCursorY = 0;
 let layoutRowHeight = 0;
+let layoutPlateIndex = 0;
 const LAYOUT_GAP_MM = 15;
-const LAYOUT_MAX_ROW_WIDTH_MM = MAX_SEGMENT_LENGTH_MM * 3 + LAYOUT_GAP_MM * 2;
 
 function resetLayoutCursor() {
     layoutCursorX = 0;
     layoutCursorY = 0;
     layoutRowHeight = 0;
+    layoutPlateIndex = 0;
 }
 
+// Platziert mesh auf der aktuellen (oder ggf. einer neuen) Druckplatte und gibt zurück, auf
+// welchem Plattenindex (0-basiert) es gelandet ist - wird für den plattenweisen Export gebraucht.
 function placeInLayout(mesh, bbox) {
     const w = bbox.max.x - bbox.min.x;
     const h = bbox.max.y - bbox.min.y;
 
-    if (layoutCursorX > 0 && layoutCursorX + w > LAYOUT_MAX_ROW_WIDTH_MM) {
+    if (layoutCursorX > 0 && layoutCursorX + w > bedWidthMM) {
         layoutCursorX = 0;
         layoutCursorY += layoutRowHeight + LAYOUT_GAP_MM;
         layoutRowHeight = 0;
     }
+    if (layoutCursorY > 0 && layoutCursorY + h > bedLengthMM) {
+        layoutPlateIndex++;
+        layoutCursorX = 0;
+        layoutCursorY = 0;
+        layoutRowHeight = 0;
+    }
 
-    mesh.position.x += (layoutCursorX - bbox.min.x);
+    const plateOffsetX = layoutPlateIndex * (bedWidthMM + PLATE_GAP_MM);
+
+    mesh.position.x += (plateOffsetX + layoutCursorX - bbox.min.x);
     mesh.position.y += (layoutCursorY - bbox.min.y);
 
     layoutCursorX += w + LAYOUT_GAP_MM;
     layoutRowHeight = Math.max(layoutRowHeight, h);
+
+    return layoutPlateIndex;
 }
 
 // Curb-Optik: zweifarbige Streifen entlang der Länge + eine gestufte RAMPE quer zur Breite -
@@ -1508,13 +1702,17 @@ function placeInLayout(mesh, bbox) {
 const CURB_STYLE = {
     stripeLengthMM: 15,           // Länge eines Rot/Weiß-Streifens (an CAD-Vorlage angelehnt)
     colors: [0xd93a2b, 0xf0f0f0], // Rot / Weiß, alternierend
-    baseHeightRatio: 0.5,         // Anteil der Gesamthöhe für die tragende Basis (trägt die Zunge/Nut)
+    baseHeightRatio: 0.5,         // Anteil der Gesamthöhe für die tragende (flache, volle Breite)
+                                   // Basis.
     rampSteps: 3,                 // zusätzliche Stufen von der Fahrbahnseite (flach) zur Außenseite (hoch)
     innerFlatWidthMM: 2,          // Breite ab der Skizzenlinie, die dauerhaft nur Basishöhe hat (0 Stufen)
     rumbleEnabled: true,          // periodische flache Riefen quer zur Breite für haptisches Feedback
     rumbleLengthMM: 12,           // Länge eines Riefen-Zyklus (Feld + Lücke)
     rumbleHeightMM: 0.4,          // wie hoch die Riefe übersteht - bewusst flach gehalten
-    rumbleColor: 0x555555         // dezentes Grau, unabhängig vom Rot/Weiß-Streifenmuster
+    rumbleColor: 0x555555,        // dezentes Grau, unabhängig vom Rot/Weiß-Streifenmuster
+    defaultJointSlopeDeg: 5       // Standard-Neigungswinkel der Auffahrrampe an jeder Segmentgrenze
+                                   // (siehe buildCurbRampMeshes -> buildJointSlopeZone) - über das
+                                   // Eingabefeld "Neigung Enden" im Tab "Bauteil" überschreibbar.
 };
 
 // Teilt eine Punktreihe in kurze, etwa gleich lange Abschnitte (für die Rot/Weiß-Streifen).
@@ -1543,25 +1741,115 @@ function splitIntoStripes(points, stripeLengthMM) {
 // auf welcher Seite der Skizzenlinie (Normalenrichtung) die Außenkante liegt. hasStartNotch/
 // hasEndTab geben an, ob dort eine Segmentgrenze (mit Zunge/Nut) liegt - nur wenn NICHT, wird
 // das jeweilige Ende abgerundet (echtes Strang-Ende). sharedTab: siehe buildSegmentOutline -
-// EINE gemeinsame Zunge/Nut-Größe+Position für ALLE Stufen (sonst seitlich versetzte Zacken).
-function buildCurbRampMeshes(localChunk, thickness, totalHeight, baseHeight, outerSign, stripeOffset, hasStartNotch, hasEndTab, sharedTab) {
-    const stripes = splitIntoStripes(localChunk, CURB_STYLE.stripeLengthMM);
+// EINE gemeinsame Zunge/Nut-Größe+Position (von der vollen Basisbreite abgeleitet, siehe
+// generate3d) für die komplette Bauteilhöhe.
+//
+// WICHTIG: Die Zunge/Nut sitzt NICHT mehr verteilt über mehrere Rampenstufen-Z-Bänder, sondern
+// ausschließlich am äußersten Rand einer eigenen "Neigungs-Rampe" (buildJointSlopeZone) direkt
+// an jeder Segmentgrenze. Diese Neigungs-Rampe läuft über die VOLLE Bauteilbreite (wie die
+// Basis, passend zur mittig zentrierten Zunge) und ihre Höhe steigt vom Bauteilrand (dort:
+// Basishöhe, dort sitzt exakt EINE Zunge/Nut-Schicht) linear bis zur normalen Rampenhöhe an -
+// mit einer über jointSlopeDeg einstellbaren Neigung, damit Fahrzeuge dort nicht an einer
+// abrupten Stufe hängen bleiben. Jenseits dieser Neigungs-Rampe läuft die normale, gestufte
+// Rampenoptik unverändert weiter (dort ohne eigene Steckverbindung).
+function buildCurbRampMeshes(localChunk, thickness, totalHeight, baseHeight, outerSign, stripeOffset, hasStartNotch, hasEndTab, sharedTab, jointSlopeDeg) {
     const meshes = [];
-
     const dir = outerSign >= 0 ? 1 : -1;
     const rampWidth = Math.max(thickness - CURB_STYLE.innerFlatWidthMM, thickness * 0.3);
     const stepWidth = rampWidth / CURB_STYLE.rampSteps;
     const stepHeight = (totalHeight - baseHeight) / CURB_STYLE.rampSteps;
+    const fullOffsetA = Math.min(0, dir * thickness);
+    const fullOffsetB = Math.max(0, dir * thickness);
+    const chunkLen = polylineLength(localChunk);
+
+    // Farbe an einer gegebenen Bogenlänge entlang DIESES Chunks - ersetzt die bisherige, rein
+    // indexbasierte (stripeOffset+i)-Formel durch eine bogenlängenbasierte Variante, damit das
+    // Rot/Weiß-Muster auch dann nahtlos weiterläuft, wenn (wie jetzt) die Neigungs-Rampe und der
+    // restliche Bereich unabhängig voneinander in Scheiben zerlegt werden.
+    function colorAt(dAlongChunk) {
+        const raw = stripeOffset + Math.floor(dAlongChunk / CURB_STYLE.stripeLengthMM);
+        const n = CURB_STYLE.colors.length;
+        return CURB_STYLE.colors[((raw % n) + n) % n];
+    }
+
+    // Rampen-Länge aus dem Neigungswinkel: rise/tan(Winkel) - je flacher der Winkel, desto
+    // länger die Auffahrrampe. Auf maximal die halbe (bei Nut UND Zapfen) bzw. fast die ganze
+    // (bei nur einem von beiden) Chunk-Länge begrenzt, damit auch kurze Segmente nicht überlaufen.
+    const rise = Math.max(totalHeight - baseHeight, 0);
+    const slopeDeg = Math.max(jointSlopeDeg || CURB_STYLE.defaultJointSlopeDeg, 0.5);
+    const rawTaperLength = rise > 0.01 ? rise / Math.tan(slopeDeg * Math.PI / 180) : 0;
+    const maxTaperEach = (hasStartNotch && hasEndTab) ? Math.max(chunkLen / 2 - 1, 0) : Math.max(chunkLen - 1, 0);
+    const taperLengthMM = Math.min(rawTaperLength, maxTaperEach);
+
+    // Baut die Neigungs-Rampe an EINEM Segmentende (isStart=true: Nut bei d=0: isStart=false:
+    // Zapfen bei d=chunkLen). Mehrere dünne Längs-Scheiben, jede über die volle Bauteilbreite,
+    // deren Höhe von der Bauteilkante (Basishöhe) zum Rampen-Inneren (volle Rampenhöhe) linear
+    // ansteigt - die Zunge/Nut sitzt ausschließlich in der äußersten (der Kante zugewandten)
+    // Scheibe.
+    function buildJointSlopeZone(isStart) {
+        if (taperLengthMM < 0.5) return;
+        const zoneStartD = isStart ? 0 : chunkLen - taperLengthMM;
+        const zoneEndD = isStart ? taperLengthMM : chunkLen;
+
+        const numSlices = Math.min(Math.max(Math.ceil(taperLengthMM / 2), 3), 12);
+        for (let s = 0; s < numSlices; s++) {
+            const t0 = s / numSlices, t1 = (s + 1) / numSlices;
+            const dA = zoneStartD + (zoneEndD - zoneStartD) * t0;
+            const dB = zoneStartD + (zoneEndD - zoneStartD) * t1;
+            const slicePts = sliceByArcLength(localChunk, dA, dB);
+            if (slicePts.length < 2) continue;
+
+            // Abstand der (der Bauteilkante zugewandten) Scheibenseite von der Segmentgrenze -
+            // 0 direkt an der Kante (-> Basishöhe), taperLengthMM am rampenseitigen Ende (->
+            // volle Rampenhöhe).
+            const edgeD = isStart ? dA : dB;
+            const distFromJoint = isStart ? edgeD : (chunkLen - edgeD);
+            const localHeight = taperLengthMM > 0
+                ? baseHeight + Math.min(distFromJoint / taperLengthMM, 1) * rise
+                : totalHeight;
+
+            const sliceHasStartNotch = isStart && s === 0 && hasStartNotch;
+            const sliceHasEndTab = !isStart && s === numSlices - 1 && hasEndTab;
+
+            const outline = buildSegmentOutline(slicePts, fullOffsetA, fullOffsetB, sliceHasStartNotch, sliceHasEndTab, false, false, sharedTab);
+            if (outline.length < 3) continue;
+            const shape = new THREE.Shape(outline.map(p => new THREE.Vector2(p.x, p.y)));
+            const midD = (dA + dB) / 2;
+            const material = new THREE.MeshStandardMaterial({ color: colorAt(midD), roughness: 0.8 });
+            try {
+                const geometry = new THREE.ExtrudeGeometry(shape, { depth: Math.max(localHeight, 0.05), bevelEnabled: false, steps: 1 });
+                meshes.push(new THREE.Mesh(geometry, material));
+            } catch (err) {
+                console.error('Curb-Neigungsrampe übersprungen (ungültige Geometrie)', err);
+            }
+        }
+    }
+
+    if (hasStartNotch) buildJointSlopeZone(true);
+    if (hasEndTab) buildJointSlopeZone(false);
+
+    // Normale gestufte Rampe für den restlichen (nicht von einer Neigungs-Rampe belegten)
+    // Bereich - unverändert zur bisherigen Optik, aber ohne eigene Zunge/Nut (die sitzt jetzt
+    // ausschließlich in den Neigungs-Rampen oben).
+    const midStartD = hasStartNotch ? taperLengthMM : 0;
+    const midEndD = hasEndTab ? chunkLen - taperLengthMM : chunkLen;
+    if (midEndD - midStartD < 0.5) return meshes;
+
+    const midPts = sliceByArcLength(localChunk, midStartD, midEndD);
+    const stripes = splitIntoStripes(midPts, CURB_STYLE.stripeLengthMM);
+    let stripeAcc = midStartD;
 
     stripes.forEach((stripePts, i) => {
-        if (stripePts.length < 2) return;
-        const color = CURB_STYLE.colors[(stripeOffset + i) % CURB_STYLE.colors.length];
+        if (stripePts.length < 2) { return; }
+        const stripeStartD = stripeAcc;
+        const color = colorAt(stripeStartD);
         const material = new THREE.MeshStandardMaterial({ color, roughness: 0.8 });
+        stripeAcc += polylineLength(stripePts);
 
+        // Echtes Strang-Ende (keine Segmentgrenze, also auch keine Neigungs-Rampe davor) wird
+        // weiterhin abgerundet statt gerade abgeschnitten.
         const roundStart = i === 0 && !hasStartNotch;
         const roundEnd = i === stripes.length - 1 && !hasEndTab;
-        const stripeHasStartNotch = i === 0 && hasStartNotch;
-        const stripeHasEndTab = i === stripes.length - 1 && hasEndTab;
 
         for (let step = 1; step <= CURB_STYLE.rampSteps; step++) {
             // Jede Stufe beginnt weiter außen (vom Fahrbahnrand weg) als die vorherige und
@@ -1573,9 +1861,7 @@ function buildCurbRampMeshes(localChunk, thickness, totalHeight, baseHeight, out
             const zOffset = baseHeight + (step - 1) * stepHeight;
 
             if (!CURB_STYLE.rumbleEnabled) {
-                // sharedTab statt eigener Berechnung je Stufe: dadurch sitzt die Zunge/Nut bei
-                // Basis UND allen Rampenstufen an derselben Stelle mit derselben Größe.
-                const outline = buildSegmentOutline(stripePts, offsetA, offsetB, stripeHasStartNotch, stripeHasEndTab, roundStart, roundEnd, sharedTab);
+                const outline = buildSegmentOutline(stripePts, offsetA, offsetB, false, false, roundStart, roundEnd, sharedTab);
                 if (outline.length < 3) continue;
                 const shape = new THREE.Shape(outline.map(p => new THREE.Vector2(p.x, p.y)));
                 try {
@@ -1596,14 +1882,12 @@ function buildCurbRampMeshes(localChunk, thickness, totalHeight, baseHeight, out
             const rumbleSegs = splitIntoStripes(stripePts, CURB_STYLE.rumbleLengthMM);
             rumbleSegs.forEach((segPts, si) => {
                 if (segPts.length < 2) return;
-                const segHasStartNotch = si === 0 && stripeHasStartNotch;
-                const segHasEndTab = si === rumbleSegs.length - 1 && stripeHasEndTab;
                 const segRoundStart = si === 0 && roundStart;
                 const segRoundEnd = si === rumbleSegs.length - 1 && roundEnd;
                 const isRidge = si % 2 === 0;
                 const segHeight = stepHeight + (isRidge ? CURB_STYLE.rumbleHeightMM : 0);
 
-                const outline = buildSegmentOutline(segPts, offsetA, offsetB, segHasStartNotch, segHasEndTab, segRoundStart, segRoundEnd, sharedTab);
+                const outline = buildSegmentOutline(segPts, offsetA, offsetB, false, false, segRoundStart, segRoundEnd, sharedTab);
                 if (outline.length < 3) return;
                 const shape = new THREE.Shape(outline.map(p => new THREE.Vector2(p.x, p.y)));
                 try {
@@ -1625,36 +1909,78 @@ function buildCurbRampMeshes(localChunk, thickness, totalHeight, baseHeight, out
 // abnehmen. Jede Stufe trägt ihre eigene Zunge/Nut, dadurch ist die Steckverbindung wie beim
 // Curb über die gesamte Höhe durchgängig, nicht nur an der Basis.
 
+// Bande: Nut und Zapfen werden NICHT über die komplette Bauteilhöhe durchgezogen (anders als
+// beim Curb), sondern auf feste Werte ab der Unterkante (Z=0) begrenzt: die Nut (Aussparung,
+// hasStartNotch) auf BANDE_DOVETAIL_Z.notchHeightMM, der Zapfen (Vorsprung, hasEndTab) auf
+// BANDE_DOVETAIL_Z.tabHeightMM - unabhängig von der Gesamthöhe der Bande.
+const BANDE_DOVETAIL_Z = {
+    notchHeightMM: 5, // Nut schneidet nur bis zu dieser Höhe ins Bauteil
+    tabHeightMM: 4     // Zapfen steht nur bis zu dieser Höhe außen an
+};
+
+// Teilt einen Höhenbereich [z0,z1) an den beiden Schwalbenschwanz-Schwellen (tabHeightMM,
+// notchHeightMM) auf und gibt für jeden entstehenden Teilbereich zurück, ob dort Nut bzw. Zapfen
+// aktiv sein sollen. So kann eine Bande-Stufe, die eine der Schwellen überschreitet, in mehrere
+// Extrusionen mit jeweils passendem Nut/Zapfen-Zustand zerlegt werden.
+function splitZRangeByDovetailLimits(z0, z1, hasStartNotch, hasEndTab) {
+    const cuts = new Set([z0, z1]);
+    if (BANDE_DOVETAIL_Z.tabHeightMM > z0 && BANDE_DOVETAIL_Z.tabHeightMM < z1) cuts.add(BANDE_DOVETAIL_Z.tabHeightMM);
+    if (BANDE_DOVETAIL_Z.notchHeightMM > z0 && BANDE_DOVETAIL_Z.notchHeightMM < z1) cuts.add(BANDE_DOVETAIL_Z.notchHeightMM);
+    const points = [...cuts].sort((a, b) => a - b);
+
+    const segments = [];
+    for (let i = 0; i < points.length - 1; i++) {
+        const zFrom = points[i], zTo = points[i + 1];
+        if (zTo - zFrom < 1e-6) continue;
+        const mid = (zFrom + zTo) / 2;
+        segments.push({
+            zFrom, zTo,
+            notch: hasStartNotch && mid <= BANDE_DOVETAIL_Z.notchHeightMM,
+            tab: hasEndTab && mid <= BANDE_DOVETAIL_Z.tabHeightMM
+        });
+    }
+    return segments;
+}
+
 function buildBandeMeshes(localChunk, thickness, totalHeight, hasStartNotch, hasEndTab, roundStart, roundEnd, color) {
     const meshes = [];
     const layers = getBandeLayers();
     const material = new THREE.MeshStandardMaterial({ color, metalness: 0.05, roughness: 0.9 });
 
-    // Gemeinsame Zunge/Nut für ALLE Stufen, abgeleitet von der SCHMALSTEN Stufe (bei diesem
-    // Profil der Schaft/die Oberkante) - sonst würde jede Stufe ihre eigene, unterschiedlich
-    // große Zunge bekommen, was gestapelt wie mehrere kleine Zacken statt einer sauberen Zunge
-    // aussieht. Bande ist symmetrisch, daher liegt die Mitte ohnehin bei jeder Stufe exakt bei 0.
-    let narrowestHalfWidth = Infinity;
-    layers.forEach(l => { narrowestHalfWidth = Math.min(narrowestHalfWidth, (thickness / 2) * l.w); });
-    const tabSize = computeTabSize(narrowestHalfWidth);
-    const sharedTab = { tabHalf: tabSize.tabHalf, tabTipHalf: tabSize.tabTipHalf, possible: tabSize.possible, anchorOffset: 0 };
+    // EINE gemeinsame Zunge, abgeleitet von der VOLLEN Bauteilbreite (breiteste/unterste Stufe)
+    // und mittig zentriert (bei Bande ohnehin immer 0, da symmetrisch). Anders als beim Curb wird
+    // sie aber NICHT über die komplette Bauteilhöhe durchgezogen, sondern je nach Z-Position
+    // dieser Schicht auf BANDE_DOVETAIL_Z begrenzt (siehe splitZRangeByDovetailLimits).
+    const tabSize = computeTabSize(thickness / 2);
+    const sharedTab = { tabHalf: tabSize.tabHalf, tabTipHalf: tabSize.tabTipHalf, tabLength: tabSize.tabLength, possible: tabSize.possible, anchorOffset: 0 };
 
     layers.forEach(l => {
         const layerHeight = totalHeight * (l.hTo - l.hFrom);
         if (layerHeight <= 0.001) return;
         const halfWidth = (thickness / 2) * l.w;
+        const z0 = totalHeight * l.hFrom;
+        const z1 = totalHeight * l.hTo;
 
-        const outline = buildSegmentOutline(localChunk, -halfWidth, halfWidth, hasStartNotch, hasEndTab, roundStart, roundEnd, sharedTab);
-        if (outline.length >= 3) {
-            const shape = new THREE.Shape(outline.map(p => new THREE.Vector2(p.x, p.y)));
-            try {
-                const geometry = new THREE.ExtrudeGeometry(shape, { depth: layerHeight, bevelEnabled: false, steps: 1 });
-                geometry.translate(0, 0, totalHeight * l.hFrom);
-                meshes.push(new THREE.Mesh(geometry, material));
-            } catch (err) {
-                console.error('Bande-Stufe übersprungen (ungültige Geometrie)', err);
+        // Diese Stufe an den Schwalbenschwanz-Höhenschwellen aufteilen (meist nur 1 Teilstück,
+        // sofern die Stufe die 4mm/5mm-Grenzen nicht überschreitet).
+        const zSegments = splitZRangeByDovetailLimits(z0, z1, hasStartNotch, hasEndTab);
+
+        zSegments.forEach(seg => {
+            const segHeight = seg.zTo - seg.zFrom;
+            if (segHeight <= 0.001) return;
+
+            const outline = buildSegmentOutline(localChunk, -halfWidth, halfWidth, seg.notch, seg.tab, roundStart, roundEnd, sharedTab);
+            if (outline.length >= 3) {
+                const shape = new THREE.Shape(outline.map(p => new THREE.Vector2(p.x, p.y)));
+                try {
+                    const geometry = new THREE.ExtrudeGeometry(shape, { depth: segHeight, bevelEnabled: false, steps: 1 });
+                    geometry.translate(0, 0, seg.zFrom);
+                    meshes.push(new THREE.Mesh(geometry, material));
+                } catch (err) {
+                    console.error('Bande-Stufe übersprungen (ungültige Geometrie)', err);
+                }
             }
-        }
+        });
     });
 
     return meshes;
@@ -1679,6 +2005,17 @@ function generate3DModel() {
         return;
     }
 
+    // Druckbett-Maße sind Pflicht: legen fest, wie lang ein Segment maximal sein darf und wie
+    // die generierten Teile auf (ggf. mehrere) Druckplatten verteilt werden.
+    const bedWidthInput = parseFloat((document.getElementById('bedWidth').value || '').toString().replace(',', '.'));
+    const bedLengthInput = parseFloat((document.getElementById('bedLength').value || '').toString().replace(',', '.'));
+    if (!bedWidthInput || !bedLengthInput || bedWidthInput < 20 || bedLengthInput < 20) {
+        alert('Bitte gültige Druckbett-Maße (Breite X / Tiefe Y, mind. 20mm) im Tab "Bauteil" angeben - das ist Pflicht, damit die Segmente richtig zugeschnitten werden können.');
+        return;
+    }
+    bedWidthMM = bedWidthInput;
+    bedLengthMM = bedLengthInput;
+
     trackLengthMM = lengthInput * 1000;
     trackWidthMM = widthInput * 1000;
 
@@ -1687,11 +2024,14 @@ function generate3DModel() {
 
     // Curb: Höhe/Tiefe kommen aus den eigenen Eingabefeldern (überschreiben den Profil-Default),
     // damit sie an die eigene Bodenfreiheit/das eigene Fahrzeug angepasst werden können.
+    let curbJointSlopeDeg = CURB_STYLE.defaultJointSlopeDeg;
     if (elementTypeValue === 'curb') {
         const curbHeightInput = parseFloat((document.getElementById('curbHeight').value || '').toString().replace(',', '.'));
         const curbDepthInput = parseFloat((document.getElementById('curbDepth').value || '').toString().replace(',', '.'));
+        const curbJointSlopeInput = parseFloat((document.getElementById('curbJointSlope')?.value || '').toString().replace(',', '.'));
         if (curbHeightInput > 0) profile.height = curbHeightInput;
         if (curbDepthInput > 0) profile.thickness = curbDepthInput;
+        if (curbJointSlopeInput > 0) curbJointSlopeDeg = curbJointSlopeInput;
     } else if (elementTypeValue === 'bande') {
         const bandeHeightInput = parseFloat((document.getElementById('bandeHeight').value || '').toString().replace(',', '.'));
         const bandeThicknessInput = parseFloat((document.getElementById('bandeThickness').value || '').toString().replace(',', '.'));
@@ -1734,42 +2074,32 @@ function generate3DModel() {
 
             if (isCurb) {
                 const bodyHeight = profile.height * CURB_STYLE.baseHeightRatio;
-                const dirSign = outerSign >= 0 ? 1 : -1;
                 // Curb: die Skizzenlinie IST die Fahrbahnkante (innen, Offset 0) - das Material
                 // liegt komplett auf der outerSign-Seite davon.
                 const offsetA = Math.min(0, outerSign * profile.thickness);
                 const offsetB = Math.max(0, outerSign * profile.thickness);
 
-                // Gemeinsame Zunge/Nut über ALLE Schichten (Basis + jede Rampenstufe) hinweg:
-                // von der SCHMALSTEN Schicht ableiten (das ist bei der Rampe immer die äußerste,
-                // oberste Stufe) und an jede Schicht dieselbe Größe+Position weitergeben. Ohne
-                // das würde jede Schicht ihre eigene Zunge an ihrer eigenen (unterschiedlichen)
-                // Mitte bauen - das erzeugt die seitlich versetzten "Zacken" statt einer saubere
-                // durchgehenden Steckverbindung.
-                const rampWidth = Math.max(profile.thickness - CURB_STYLE.innerFlatWidthMM, profile.thickness * 0.3);
-                const stepWidth = rampWidth / CURB_STYLE.rampSteps;
-                const layerRanges = [{ offsetA, offsetB }];
-                for (let step = 1; step <= CURB_STYLE.rampSteps; step++) {
-                    const innerBoundary = dirSign * (CURB_STYLE.innerFlatWidthMM + (step - 1) * stepWidth);
-                    const outerBoundary = dirSign * profile.thickness;
-                    layerRanges.push({ offsetA: Math.min(innerBoundary, outerBoundary), offsetB: Math.max(innerBoundary, outerBoundary) });
-                }
-                let narrowest = layerRanges[0];
-                layerRanges.forEach(l => {
-                    if ((l.offsetB - l.offsetA) < (narrowest.offsetB - narrowest.offsetA)) narrowest = l;
-                });
-                const narrowestHalfWidth = (narrowest.offsetB - narrowest.offsetA) / 2;
-                const tabSize = computeTabSize(narrowestHalfWidth);
+                // EINE gemeinsame Zunge, abgeleitet von der VOLLEN Bauteilbreite der untersten
+                // (breitesten) Ebene - der Basis - und mittig darauf zentriert. Sie wird
+                // unverändert an die Neigungs-Rampe an jeder Segmentgrenze weitergegeben (siehe
+                // buildCurbRampMeshes -> buildJointSlopeZone), wo sie mit EINER Zungengröße durch
+                // die komplette (dort auf volle Basisbreite laufende) Bauteilhöhe durchdringt.
+                const tabSize = computeTabSize((offsetB - offsetA) / 2);
                 const sharedTab = {
                     tabHalf: tabSize.tabHalf,
                     tabTipHalf: tabSize.tabTipHalf,
+                    tabLength: tabSize.tabLength,
                     possible: tabSize.possible,
-                    anchorOffset: (narrowest.offsetA + narrowest.offsetB) / 2
+                    anchorOffset: (offsetA + offsetB) / 2
                 };
 
+                // Die flache Basis selbst trägt KEINE eigene Nut/Zapfen mehr (unconditional false)
+                // - die Steckverbindung sitzt jetzt ausschließlich in der Neigungs-Rampe, die
+                // ohnehin bei Z=0 beginnt und diesen Bereich mit abdeckt (redundante, doppelt
+                // geschnittene Geometrie an derselben Stelle wird so vermieden).
                 let outline;
                 try {
-                    outline = buildSegmentOutline(localChunk, offsetA, offsetB, hasStartNotch, hasEndTab, roundStart, roundEnd, sharedTab);
+                    outline = buildSegmentOutline(localChunk, offsetA, offsetB, false, false, roundStart, roundEnd, sharedTab);
                 } catch (err) {
                     console.error('Fehler beim Erzeugen des Umrisses', err);
                     return;
@@ -1788,7 +2118,7 @@ function generate3DModel() {
                     }
                 }
 
-                const rampMeshes = buildCurbRampMeshes(localChunk, profile.thickness, profile.height, bodyHeight, outerSign, globalStripeIndex, hasStartNotch, hasEndTab, sharedTab);
+                const rampMeshes = buildCurbRampMeshes(localChunk, profile.thickness, profile.height, bodyHeight, outerSign, globalStripeIndex, hasStartNotch, hasEndTab, sharedTab, curbJointSlopeDeg);
                 rampMeshes.forEach(m => partGroup.add(m));
                 globalStripeIndex += splitIntoStripes(localChunk, CURB_STYLE.stripeLengthMM).length;
             } else {
@@ -1803,9 +2133,9 @@ function generate3DModel() {
             const bbox = new THREE.Box3().setFromObject(partGroup);
             const bboxX = bbox.max.x - bbox.min.x;
             const bboxY = bbox.max.y - bbox.min.y;
-            const fitsBed = bboxX <= MAX_SEGMENT_LENGTH_MM && bboxY <= MAX_SEGMENT_LENGTH_MM;
+            const fitsBed = bboxX <= bedWidthMM && bboxY <= bedLengthMM;
 
-            placeInLayout(partGroup, bbox);
+            const plateIndex = placeInLayout(partGroup, bbox);
             trackGroup.add(partGroup);
 
             const lengthMM = polylineLength(chunk);
@@ -1818,11 +2148,13 @@ function generate3DModel() {
                 type: elementTypeValue,
                 lengthMM,
                 mesh: partGroup,
-                fitsBed
+                fitsBed,
+                plateIndex
             });
         });
     });
 
+    rebuildBedVisuals(layoutPlateIndex + 1);
     updatePartsList();
     const exportBtn = document.getElementById('exportStl');
     if (exportBtn) exportBtn.disabled = generatedSegments.length === 0;
@@ -1847,22 +2179,56 @@ function updatePartsList() {
         return;
     }
 
-    let html = '<table><tr><th>#</th><th>Typ</th><th>Länge</th><th>Bett</th></tr>';
+    let html = '<table><tr><th>#</th><th>Typ</th><th>Länge</th><th>Platte</th><th>Bett</th></tr>';
     generatedSegments.forEach(seg => {
         const typeLabel = ELEMENT_PROFILES[seg.type] ? ELEMENT_PROFILES[seg.type].label : seg.type;
         html += `<tr>
             <td>${seg.id}</td>
             <td>${typeLabel}</td>
             <td>${seg.lengthMM.toFixed(0)} mm</td>
+            <td>${(seg.plateIndex ?? 0) + 1}</td>
             <td style="color:${seg.fitsBed ? '#4caf50' : '#ff5555'}">${seg.fitsBed ? 'OK' : '⚠'}</td>
         </tr>`;
     });
     html += '</table>';
-    html += `<div style="margin-top:5px;color:#999;">Gesamt: ${generatedSegments.length} Teile</div>`;
+    const plateCount = Math.max(...generatedSegments.map(s => (s.plateIndex ?? 0))) + 1;
+    html += `<div style="margin-top:5px;color:#999;">Gesamt: ${generatedSegments.length} Teile auf ${plateCount} Druckplatte${plateCount > 1 ? 'n' : ''}</div>`;
     container.innerHTML = html;
 }
 
 // --- 11. STL-EXPORT (ZIP) ---
+// Gruppiert die generierten Segmente nach Druckplatte (plateIndex, 0-basiert). Map-Reihenfolge
+// entspricht der Einfüge-Reihenfolge, wird aber unten trotzdem sortiert durchlaufen.
+function groupSegmentsByPlate() {
+    const groups = new Map();
+    generatedSegments.forEach(seg => {
+        const p = seg.plateIndex ?? 0;
+        if (!groups.has(p)) groups.set(p, []);
+        groups.get(p).push(seg);
+    });
+    return groups;
+}
+
+// Baut ein ZIP (als Uint8Array) mit den STL-Dateien EINER Druckplatte.
+async function buildPlateSTLZipBytes(segments) {
+    const exporter = new THREE.STLExporter();
+    const zip = new JSZip();
+
+    segments.forEach(seg => {
+        const rawResult = exporter.parse(seg.mesh, { binary: true });
+        // Der three.js STLExporter liefert im Binary-Modus ein DataView zurück -
+        // JSZip erkennt DataView nicht als gültigen Datentyp, deshalb hier explizit
+        // in ein Uint8Array (auf denselben Bytes) umwandeln.
+        const stlData = (rawResult instanceof DataView)
+            ? new Uint8Array(rawResult.buffer, rawResult.byteOffset, rawResult.byteLength)
+            : rawResult;
+        const filename = `segment_${String(seg.id).padStart(2, '0')}_${seg.type}.stl`;
+        zip.file(filename, stlData);
+    });
+
+    return zip.generateAsync({ type: 'uint8array' });
+}
+
 async function exportAllSTL() {
     if (generatedSegments.length === 0) return;
     if (typeof THREE.STLExporter === 'undefined' || typeof JSZip === 'undefined') {
@@ -1874,23 +2240,25 @@ async function exportAllSTL() {
     if (exportBtn) exportBtn.disabled = true;
 
     try {
-        const exporter = new THREE.STLExporter();
-        const zip = new JSZip();
+        const groups = groupSegmentsByPlate();
+        const plateIndices = [...groups.keys()].sort((a, b) => a - b);
 
-        generatedSegments.forEach(seg => {
-            const rawResult = exporter.parse(seg.mesh, { binary: true });
-            // Der three.js STLExporter liefert im Binary-Modus ein DataView zurück -
-            // JSZip erkennt DataView nicht als gültigen Datentyp, deshalb hier explizit
-            // in ein Uint8Array (auf denselben Bytes) umwandeln.
-            const stlData = (rawResult instanceof DataView)
-                ? new Uint8Array(rawResult.buffer, rawResult.byteOffset, rawResult.byteLength)
-                : rawResult;
-            const filename = `segment_${String(seg.id).padStart(2, '0')}_${seg.type}.stl`;
-            zip.file(filename, stlData);
-        });
-
-        const blob = await zip.generateAsync({ type: 'blob' });
-        downloadBlob(blob, 'rc-track-segmente.zip');
+        if (plateIndices.length <= 1) {
+            // Nur eine Platte -> wie bisher direkt ein ZIP mit allen STL-Dateien.
+            const bytes = await buildPlateSTLZipBytes(generatedSegments);
+            downloadBlob(new Blob([bytes]), 'rc-track-segmente.zip');
+        } else {
+            // Mehrere Platten -> je Platte ein eigenes ZIP, alle gebündelt in einem äußeren ZIP
+            // (ein einzelner Download-Klick, aber pro Druckplatte eine eigene, in sich
+            // vollständige Datei zum separaten Slicen/Drucken).
+            const outerZip = new JSZip();
+            for (const p of plateIndices) {
+                const bytes = await buildPlateSTLZipBytes(groups.get(p));
+                outerZip.file(`Druckplatte_${p + 1}.zip`, bytes);
+            }
+            const blob = await outerZip.generateAsync({ type: 'blob' });
+            downloadBlob(blob, `rc-track-segmente-${plateIndices.length}-platten.zip`);
+        }
     } catch (err) {
         console.error(err);
         alert('STL-Export fehlgeschlagen: ' + err.message);
@@ -1902,9 +2270,120 @@ async function exportAllSTL() {
 // --- 11b. 3MF-EXPORT (mit Farbe) ---
 // three.js liefert selbst keinen 3MF-Exporter mit (nur einen Loader). 3MF ist im Kern aber nur
 // ein ZIP-Container mit ein paar XML-Dateien (ähnlich docx/xlsx) - das lässt sich mit dem
-// bereits geladenen JSZip direkt selbst schreiben. Jedes einzelne Mesh (Basis, jede Rampenstufe,
-// jeder Rot/Weiß-Streifen) wird als eigenes <object> mit eigener Farbe (<basematerials>)
-// exportiert, seine Weltposition/-drehung wird als 4x4-Transform-Matrix auf das <item> gelegt.
+// bereits geladenen JSZip direkt selbst schreiben. Pro Druckteil (Segment) werden alle seine
+// Meshes (Basis, Rampenstufen, Streifen, ...) zu EINEM <object> zusammengefasst - Farbe bleibt
+// dabei pro Dreieck über eine m:colorgroup erhalten (siehe Kommentar unten), Weltposition wird
+// beim Zusammenfassen direkt in die Vertex-Koordinaten eingerechnet.
+// Baut die 3MF-Bytes (Uint8Array) für EINE Druckplatte, oder null, wenn nichts zu exportieren ist.
+async function buildPlate3MFBytes(segments) {
+    const zip = new JSZip();
+
+    const colorToIndex = new Map();
+    const colorList = [];
+    function materialIndexFor(hexColor) {
+        if (colorToIndex.has(hexColor)) return colorToIndex.get(hexColor);
+        const idx = colorList.length;
+        colorList.push(hexColor);
+        colorToIndex.set(hexColor, idx);
+        return idx;
+    }
+
+    let objectsXML = '';
+    let itemsXML = '';
+    let objectId = 2; // 1 ist für die Farb-Resource reserviert
+
+    const v = new THREE.Vector3();
+
+    segments.forEach(seg => {
+        seg.mesh.updateMatrixWorld(true);
+
+        // Alle Meshes DIESES Druckteils (Basis, Rampenstufen, Streifen, ...) werden zu EINEM
+        // gemeinsamen <object> zusammengefasst (Vertex-Indizes je Mesh um vertexOffset
+        // verschoben), statt wie zuvor ein eigenes <object> pro Einzel-Mesh zu exportieren.
+        // Grund: BambuStudio meldet bei vielen separaten, überlappend/gestapelt positionierten
+        // Objekten "Mehrteiliges Objekt erkannt" - ein Druckteil soll aber als EIN Objekt in
+        // der Objektliste erscheinen. Farbe bleibt trotzdem pro Dreieck erhalten (Face Coloring).
+        let verticesXML = '';
+        let trianglesXML = '';
+        let vertexOffset = 0;
+
+        seg.mesh.traverse(node => {
+            if (!node.isMesh) return;
+            const geometry = node.geometry;
+            const posAttr = geometry.attributes.position;
+            if (!posAttr) return;
+
+            const hexColor = '#' + node.material.color.getHexString().toUpperCase();
+            const matIdx = materialIndexFor(hexColor);
+
+            for (let i = 0; i < posAttr.count; i++) {
+                v.fromBufferAttribute(posAttr, i);
+                v.applyMatrix4(node.matrixWorld);
+                verticesXML += `<vertex x="${v.x.toFixed(4)}" y="${v.y.toFixed(4)}" z="${v.z.toFixed(4)}"/>`;
+            }
+
+            // WICHTIG: Farbe wird pro DREIECK über pid/p1 auf die m:colorgroup gesetzt
+            // ("Face Coloring") statt nur einmal auf das <object> - laut BambuStudio-Wiki
+            // werden nur Vertex- oder Face-Coloring automatisch erkannt, ein reines
+            // objektweites <basematerials>-pid wird von BambuStudio ignoriert (bleibt grau),
+            // auch wenn Windows' eigener 3D-Viewer (breiterer 3MF-Support) es korrekt zeigt.
+            const index = geometry.index;
+            if (index) {
+                for (let i = 0; i < index.count; i += 3) {
+                    const a = index.getX(i) + vertexOffset;
+                    const b = index.getX(i + 1) + vertexOffset;
+                    const c = index.getX(i + 2) + vertexOffset;
+                    trianglesXML += `<triangle v1="${a}" v2="${b}" v3="${c}" pid="1" p1="${matIdx}"/>`;
+                }
+            } else {
+                for (let i = 0; i < posAttr.count; i += 3) {
+                    const a = i + vertexOffset, b = i + 1 + vertexOffset, c = i + 2 + vertexOffset;
+                    trianglesXML += `<triangle v1="${a}" v2="${b}" v3="${c}" pid="1" p1="${matIdx}"/>`;
+                }
+            }
+
+            vertexOffset += posAttr.count;
+        });
+
+        if (!trianglesXML) return; // dieses Druckteil hatte keine exportierbare Geometrie
+
+        // Kein objektweites pid/pindex mehr (ein Objekt kann jetzt mehrere Farben enthalten) -
+        // die Farbe steckt vollständig in den Dreiecken selbst.
+        objectsXML += `<object id="${objectId}" type="model"><mesh><vertices>${verticesXML}</vertices><triangles>${trianglesXML}</triangles></mesh></object>`;
+        itemsXML += `<item objectid="${objectId}"/>`;
+        objectId++;
+    });
+
+    if (!objectsXML) return null;
+
+    // m:colorgroup (Materials & Properties Extension) statt/zusätzlich zu <basematerials> -
+    // das ist der Mechanismus, den BambuStudio/OrcaSlicer für automatische Farberkennung
+    // beim 3MF-Import tatsächlich auswerten.
+    const colorGroupXML = colorList.map(c => `<m:color color="${c}FF"/>`).join('');
+
+    const modelXML = `<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:m="http://schemas.microsoft.com/3dmanufacturing/material/2015/02">
+<resources>
+<m:colorgroup id="1">${colorGroupXML}</m:colorgroup>
+${objectsXML}
+</resources>
+<build>${itemsXML}</build>
+</model>`;
+
+    zip.file('[Content_Types].xml',
+        `<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
+        `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+        `<Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/></Types>`);
+
+    zip.file('_rels/.rels',
+        `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/></Relationships>`);
+
+    zip.file('3D/3dmodel.model', modelXML);
+
+    return zip.generateAsync({ type: 'uint8array' });
+}
+
 async function exportColored3MF() {
     if (generatedSegments.length === 0) return;
     if (typeof JSZip === 'undefined') {
@@ -1916,99 +2395,27 @@ async function exportColored3MF() {
     if (btn) btn.disabled = true;
 
     try {
-        const zip = new JSZip();
+        const groups = groupSegmentsByPlate();
+        const plateIndices = [...groups.keys()].sort((a, b) => a - b);
 
-        const colorToIndex = new Map();
-        const colorList = [];
-        function materialIndexFor(hexColor) {
-            if (colorToIndex.has(hexColor)) return colorToIndex.get(hexColor);
-            const idx = colorList.length;
-            colorList.push(hexColor);
-            colorToIndex.set(hexColor, idx);
-            return idx;
+        if (plateIndices.length <= 1) {
+            const bytes = await buildPlate3MFBytes(generatedSegments);
+            if (!bytes) {
+                alert('Keine exportierbaren Bauteile gefunden.');
+                return;
+            }
+            downloadBlob(new Blob([bytes]), 'rc-track-farbig.3mf');
+        } else {
+            // Mehrere Platten -> je Platte eine eigene, vollständige .3mf-Datei, alle gebündelt
+            // in einem äußeren ZIP (ein Download-Klick, mehrere eigenständige 3MF-Dateien drin).
+            const outerZip = new JSZip();
+            for (const p of plateIndices) {
+                const bytes = await buildPlate3MFBytes(groups.get(p));
+                if (bytes) outerZip.file(`Druckplatte_${p + 1}.3mf`, bytes);
+            }
+            const blob = await outerZip.generateAsync({ type: 'blob' });
+            downloadBlob(blob, `rc-track-farbig-${plateIndices.length}-platten.zip`);
         }
-
-        let objectsXML = '';
-        let itemsXML = '';
-        let objectId = 2; // 1 ist für die Farb-Resource reserviert
-
-        const v = new THREE.Vector3();
-
-        generatedSegments.forEach(seg => {
-            seg.mesh.updateMatrixWorld(true);
-            seg.mesh.traverse(node => {
-                if (!node.isMesh) return;
-                const geometry = node.geometry;
-                const posAttr = geometry.attributes.position;
-                if (!posAttr) return;
-
-                const hexColor = '#' + node.material.color.getHexString().toUpperCase();
-                const matIdx = materialIndexFor(hexColor);
-
-                let verticesXML = '';
-                for (let i = 0; i < posAttr.count; i++) {
-                    v.fromBufferAttribute(posAttr, i);
-                    v.applyMatrix4(node.matrixWorld);
-                    verticesXML += `<vertex x="${v.x.toFixed(4)}" y="${v.y.toFixed(4)}" z="${v.z.toFixed(4)}"/>`;
-                }
-
-                // WICHTIG: Farbe wird pro DREIECK über pid/p1 auf die m:colorgroup gesetzt
-                // ("Face Coloring") statt nur einmal auf das <object> - laut BambuStudio-Wiki
-                // werden nur Vertex- oder Face-Coloring automatisch erkannt, ein reines
-                // objektweites <basematerials>-pid wird von BambuStudio ignoriert (bleibt grau),
-                // auch wenn Windows' eigener 3D-Viewer (breiterer 3MF-Support) es korrekt zeigt.
-                let trianglesXML = '';
-                const index = geometry.index;
-                if (index) {
-                    for (let i = 0; i < index.count; i += 3) {
-                        trianglesXML += `<triangle v1="${index.getX(i)}" v2="${index.getX(i + 1)}" v3="${index.getX(i + 2)}" pid="1" p1="${matIdx}"/>`;
-                    }
-                } else {
-                    for (let i = 0; i < posAttr.count; i += 3) {
-                        trianglesXML += `<triangle v1="${i}" v2="${i + 1}" v3="${i + 2}" pid="1" p1="${matIdx}"/>`;
-                    }
-                }
-
-                // pid/pindex auch auf Objekt-Ebene mitgeben (Fallback für Programme, die nur
-                // objektweite Farbe lesen, z.B. Windows 3D-Viewer / manche CAD-Importer).
-                objectsXML += `<object id="${objectId}" type="model" pid="1" pindex="${matIdx}"><mesh><vertices>${verticesXML}</vertices><triangles>${trianglesXML}</triangles></mesh></object>`;
-                itemsXML += `<item objectid="${objectId}"/>`;
-                objectId++;
-            });
-        });
-
-        if (!objectsXML) {
-            alert('Keine exportierbaren Bauteile gefunden.');
-            return;
-        }
-
-        // m:colorgroup (Materials & Properties Extension) statt/zusätzlich zu <basematerials> -
-        // das ist der Mechanismus, den BambuStudio/OrcaSlicer für automatische Farberkennung
-        // beim 3MF-Import tatsächlich auswerten.
-        const colorGroupXML = colorList.map(c => `<m:color color="${c}FF"/>`).join('');
-
-        const modelXML = `<?xml version="1.0" encoding="UTF-8"?>
-<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:m="http://schemas.microsoft.com/3dmanufacturing/material/2015/02">
-<resources>
-<m:colorgroup id="1">${colorGroupXML}</m:colorgroup>
-${objectsXML}
-</resources>
-<build>${itemsXML}</build>
-</model>`;
-
-        zip.file('[Content_Types].xml',
-            `<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
-            `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
-            `<Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/></Types>`);
-
-        zip.file('_rels/.rels',
-            `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
-            `<Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/></Relationships>`);
-
-        zip.file('3D/3dmodel.model', modelXML);
-
-        const blob = await zip.generateAsync({ type: 'blob' });
-        downloadBlob(blob, 'rc-track-farbig.3mf');
     } catch (err) {
         console.error(err);
         alert('3MF-Export fehlgeschlagen: ' + err.message);
@@ -2038,8 +2445,11 @@ function saveProject() {
         elementType: document.getElementById('elementType').value,
         curbHeight: document.getElementById('curbHeight').value,
         curbDepth: document.getElementById('curbDepth').value,
+        curbJointSlope: document.getElementById('curbJointSlope')?.value,
         bandeHeight: document.getElementById('bandeHeight').value,
         bandeThickness: document.getElementById('bandeThickness').value,
+        bedWidth: document.getElementById('bedWidth').value,
+        bedLength: document.getElementById('bedLength').value,
         paths
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -2065,8 +2475,11 @@ function applyProjectData(data) {
     document.getElementById('elementType').value = data.elementType ?? 'bande';
     document.getElementById('curbHeight').value = data.curbHeight ?? '2';
     document.getElementById('curbDepth').value = data.curbDepth ?? '20';
+    if (document.getElementById('curbJointSlope')) document.getElementById('curbJointSlope').value = data.curbJointSlope ?? '5';
     document.getElementById('bandeHeight').value = data.bandeHeight ?? '15';
     document.getElementById('bandeThickness').value = data.bandeThickness ?? '10';
+    document.getElementById('bedWidth').value = data.bedWidth ?? '250';
+    document.getElementById('bedLength').value = data.bedLength ?? '250';
     updateElementDimsVisibility();
     // Abwärtskompatibel: alte Projektdateien speicherten paths als reine Punkt-Arrays.
     paths = Array.isArray(data.paths)
@@ -2099,8 +2512,11 @@ function autosave() {
             elementType: document.getElementById('elementType')?.value,
             curbHeight: document.getElementById('curbHeight')?.value,
             curbDepth: document.getElementById('curbDepth')?.value,
+            curbJointSlope: document.getElementById('curbJointSlope')?.value,
             bandeHeight: document.getElementById('bandeHeight')?.value,
             bandeThickness: document.getElementById('bandeThickness')?.value,
+            bedWidth: document.getElementById('bedWidth')?.value,
+            bedLength: document.getElementById('bedLength')?.value,
             paths
         }));
     } catch (e) {

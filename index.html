@@ -33,8 +33,7 @@
             <div id="tabBar">
                 <button class="tab-btn active" data-tab="sketch">✏️ Skizze</button>
                 <button class="tab-btn" data-tab="part">🧱 Bauteil</button>
-                <button class="tab-btn" data-tab="project">💾 Projekt</button>
-                <button class="tab-btn" data-tab="export">📦 Export</button>
+                <button class="tab-btn" data-tab="export">📦 Export &amp; Speichern</button>
             </div>
 
             <!-- TAB: Skizze -->
@@ -83,6 +82,23 @@
             <!-- TAB: Bauteil -->
             <div class="tab-panel" data-panel="part">
                 <div class="card">
+                    <h3><span class="card-icon">🖨️</span>Druckbett-Größe</h3>
+                    <div class="input-row">
+                        <div>
+                            <label>Breite X (mm) *</label>
+                            <input type="number" id="bedWidth" value="250" step="1" min="20">
+                        </div>
+                        <div>
+                            <label>Tiefe Y (mm) *</label>
+                            <input type="number" id="bedLength" value="250" step="1" min="20">
+                        </div>
+                    </div>
+                    <div class="hint-box">
+                        <strong>Pflichtangabe</strong> vor dem Generieren - danach werden die Segmente automatisch auf diese Plattengröße zugeschnitten. Passen nicht alle Teile auf eine Platte, werden automatisch weitere Druckplatten angelegt (nebeneinander in der 3D-Vorschau, beim Export eine Datei je Platte).
+                    </div>
+                </div>
+
+                <div class="card">
                     <h3><span class="card-icon">🧱</span>Element-Typ &amp; Maße</h3>
                     <select id="elementType">
                         <option value="bande">Bande (Beton-Leitwand-Optik)</option>
@@ -108,24 +124,18 @@
                             <input type="number" id="curbDepth" value="20" step="0.5" min="4">
                         </div>
                     </div>
+                    <div class="input-row" id="curbSlopeRow">
+                        <div>
+                            <label>Neigung Enden (°):</label>
+                            <input type="number" id="curbJointSlope" value="5" step="0.5" min="0.5" max="60">
+                        </div>
+                    </div>
+                    <div class="hint" id="curbSlopeHint">Winkel, mit dem die Rampe an jeder Segmentgrenze zur Steckverbindung hin abflacht (kleinerer Wert = längere, sanftere Auffahrrampe) - verhindert, dass Fahrzeuge an der Stoßstelle hängen bleiben.</div>
                     <button id="generate3d" class="btn-primary">🧊 3D Modell Generieren</button>
                 </div>
             </div>
 
-            <!-- TAB: Projekt -->
-            <div class="tab-panel" data-panel="project">
-                <div class="card">
-                    <h3><span class="card-icon">💾</span>Projekt Speichern / Laden</h3>
-                    <div class="button-row">
-                        <button id="saveFileBtn" class="btn-secondary">Speichern (.json)</button>
-                        <button id="loadFileBtn" class="btn-secondary">Laden (.json)</button>
-                    </div>
-                    <input type="file" id="projectFileInput" accept=".json" style="display: none;">
-                    <div class="hint">Deine Skizze wird zusätzlich automatisch in diesem Browser zwischengespeichert (lokal, ohne Server).</div>
-                </div>
-            </div>
-
-            <!-- TAB: Export -->
+            <!-- TAB: Export & Speichern -->
             <div class="tab-panel" data-panel="export">
                 <div class="card">
                     <h3><span class="card-icon">📋</span>Stückliste</h3>
@@ -135,7 +145,16 @@
                     <h3><span class="card-icon">📦</span>Export</h3>
                     <button id="exportStl" class="btn-primary" disabled>⬇️ STL Dateiensatz (.zip)</button>
                     <button id="export3mf" class="btn-secondary" disabled>⬇️ 3MF (mit Farbe)</button>
-                    <div class="hint">STL enthält keine Farbe (Format-Grenze). 3MF ist ein modernes ZIP/XML-Format mit Farbe pro Bauteil - unterstützt u.a. von BambuStudio, OrcaSlicer, PrusaSlicer &amp; Cura.</div>
+                    <div class="hint">STL enthält keine Farbe (Format-Grenze). 3MF ist ein modernes ZIP/XML-Format mit Farbe pro Bauteil - unterstützt u.a. von BambuStudio, OrcaSlicer, PrusaSlicer &amp; Cura. Bei mehreren Druckplatten enthält der Download je Platte eine eigene Datei.</div>
+                </div>
+                <div class="card">
+                    <h3><span class="card-icon">💾</span>Projekt Speichern / Laden</h3>
+                    <div class="button-row">
+                        <button id="saveFileBtn" class="btn-secondary">Speichern (.json)</button>
+                        <button id="loadFileBtn" class="btn-secondary">Laden (.json)</button>
+                    </div>
+                    <input type="file" id="projectFileInput" accept=".json" style="display: none;">
+                    <div class="hint">Deine Skizze wird zusätzlich automatisch in diesem Browser zwischengespeichert (lokal, ohne Server).</div>
                 </div>
             </div>
         </div>
@@ -157,7 +176,7 @@
                 </div>
             </div>
             <div class="viewport-container" id="viewport3D">
-                <span class="label">3D Vorschau (Platte = 250×250mm Druckbett)</span>
+                <span class="label">3D Vorschau (Druckplatte(n) gemäß Tab „Bauteil")</span>
                 <div id="threeContainer"></div>
             </div>
         </div>

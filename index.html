@@ -117,20 +117,20 @@
                     <div class="input-row" id="curbDimsRow">
                         <div>
                             <label>Curb Höhe (mm):</label>
-                            <input type="number" id="curbHeight" value="2" step="0.1" min="0.2">
+                            <input type="number" id="curbHeight" value="2" step="0.1" min="0.4">
                         </div>
                         <div>
                             <label>Curb Tiefe (mm):</label>
                             <input type="number" id="curbDepth" value="20" step="0.5" min="4">
                         </div>
                     </div>
-                    <div class="input-row" id="curbSlopeRow">
+                    <div class="input-row" id="curbPatternRow">
                         <div>
-                            <label>Neigung Enden (°):</label>
-                            <input type="number" id="curbJointSlope" value="5" step="0.5" min="0.5" max="60">
+                            <label>Farbblock-Länge (mm):</label>
+                            <input type="number" id="curbPatternLength" value="15" step="0.5" min="5" max="50">
                         </div>
                     </div>
-                    <div class="hint" id="curbSlopeHint">Winkel, mit dem die Rampe an jeder Segmentgrenze zur Steckverbindung hin abflacht (kleinerer Wert = längere, sanftere Auffahrrampe) - verhindert, dass Fahrzeuge an der Stoßstelle hängen bleiben.</div>
+                    <div class="hint" id="curbGeometryHint">Der weiße Grundkörper ist fest 0,4 mm hoch. Die Curb-Neigung ergibt sich automatisch aus Curb-Höhe und Curb-Tiefe. Die Farbblock-Länge steuert zugleich die Struktur: die Längsstruktur läuft synchron zum Farbraster und ist jetzt halb so dicht wie zuvor: über zwei Farbblöcke entstehen 5 Strukturfelder. Bei 15 mm Farbblock-Länge entspricht das einem Strukturraster von 6 mm im Modell. Die Quer-Stufen, die den Curb-Winkel bilden, bleiben unverändert.</div>
                     <button id="generate3d" class="btn-primary">🧊 3D Modell Generieren</button>
                 </div>
             </div>

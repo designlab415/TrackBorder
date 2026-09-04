@@ -507,15 +507,11 @@ function updateOuterSideToggleLabel() {
 function updateElementDimsVisibility() {
     const curbRow = document.getElementById('curbDimsRow');
     const bandeRow = document.getElementById('bandeDimsRow');
-    const curbSlopeRow = document.getElementById('curbSlopeRow');
-    const curbSlopeHint = document.getElementById('curbSlopeHint');
     const select = document.getElementById('elementType');
     if (!select) return;
     const isCurb = select.value === 'curb';
     if (curbRow) curbRow.style.display = isCurb ? 'flex' : 'none';
     if (bandeRow) bandeRow.style.display = isCurb ? 'none' : 'flex';
-    if (curbSlopeRow) curbSlopeRow.style.display = isCurb ? 'flex' : 'none';
-    if (curbSlopeHint) curbSlopeHint.style.display = isCurb ? 'block' : 'none';
 }
 
 function updateSketchStatus() {
@@ -1366,6 +1362,66 @@ function computeNotchGeometry(tabHalf, tabTipHalf, tabLength, clearance) {
 // daher Größe+Position EINMAL (von der schmalsten Schicht im Stapel) und gibt sie an ALLE
 // Schichten weiter. Die Rundung (roundStart/roundEnd) bleibt davon unberührt und nutzt weiterhin
 // die eigene, echte Mitte dieser Schicht (die beiden Zwecke schließen sich pro Ende ohnehin aus).
+// Schneidet ein lokales Connector-Polygon (l = Längsrichtung, w = Curb-Breite)
+// auf die tatsächlich in dieser Höhenlage vorhandene Breite [wMin,wMax].
+// So bleibt der Curb-Schwalbenschwanz über ALLE Höhenlagen auf derselben globalen
+// Curb-Mitte, ohne dass schmalere Rampenstufen ihn neu zentrieren oder verkleinern.
+function clipConnectorPolygonToWidth(poly, wMin, wMax) {
+    function clip(input, keep, intersect) {
+        if (!input.length) return [];
+        const out = [];
+        for (let i = 0; i < input.length; i++) {
+            const a = input[i];
+            const b = input[(i + 1) % input.length];
+            const ain = keep(a), bin = keep(b);
+            if (ain && bin) out.push(b);
+            else if (ain && !bin) out.push(intersect(a, b));
+            else if (!ain && bin) { out.push(intersect(a, b)); out.push(b); }
+        }
+        return out;
+    }
+    let out = poly.slice();
+    out = clip(out, p => p.w >= wMin - 1e-9, (a,b) => {
+        const t = (wMin - a.w) / ((b.w - a.w) || 1e-12);
+        return { l: a.l + (b.l - a.l) * t, w: wMin };
+    });
+    out = clip(out, p => p.w <= wMax + 1e-9, (a,b) => {
+        const t = (wMax - a.w) / ((b.w - a.w) || 1e-12);
+        return { l: a.l + (b.l - a.l) * t, w: wMax };
+    });
+    return out;
+}
+
+// Liefert aus dem geclippten Trapez die offene Randlinie vom unteren zum oberen
+// Anschluss an der Segment-Stirnfläche (l=0), aber über die tiefe/projizierte Seite.
+// Gibt [] zurück, wenn diese Höhenlage die Connector-Basis gar nicht berührt.
+function connectorOpenBoundary(poly, wMin, wMax) {
+    const q = clipConnectorPolygonToWidth(poly, wMin, wMax);
+    if (q.length < 3) return [];
+    const zero = [];
+    q.forEach((p, i) => { if (Math.abs(p.l) < 1e-7) zero.push({ i, p }); });
+    if (zero.length < 2) return [];
+    zero.sort((a,b) => a.p.w - b.p.w);
+    const lo = zero[0], hi = zero[zero.length - 1];
+
+    function pathBetween(i0, i1, step) {
+        const path = [q[i0]];
+        let i = i0;
+        for (let guard = 0; guard < q.length + 2; guard++) {
+            if (i === i1) break;
+            i = (i + step + q.length) % q.length;
+            path.push(q[i]);
+            if (i === i1) break;
+        }
+        return path;
+    }
+    const p1 = pathBetween(lo.i, hi.i, 1);
+    const p2 = pathBetween(lo.i, hi.i, -1);
+    const maxL1 = Math.max(...p1.map(p => p.l));
+    const maxL2 = Math.max(...p2.map(p => p.l));
+    return maxL1 >= maxL2 ? p1 : p2;
+}
+
 function buildSegmentOutline(centerlinePoints, offsetA, offsetB, hasStartNotch, hasEndTab, roundStart, roundEnd, tabOverride) {
     const n = centerlinePoints.length;
     const tangents = centerlinePoints.map((p, i) => {
@@ -1396,15 +1452,8 @@ function buildSegmentOutline(centerlinePoints, offsetA, offsetB, hasStartNotch, 
         dovetailPossible = tabOverride.possible;
         tabCenterOffset = tabOverride.anchorOffset;
 
-        // Die EINE, gemeinsame Zunge wird von der vollen Bauteilbreite (Basis) abgeleitet und
-        // soll unverändert durch JEDE Schicht durchgezogen werden. Passt sie in dieser (ggf.
-        // schmaleren) Schicht nicht mehr hinein, würde ein direktes Anwenden zu einer
-        // selbstüberschneidenden (kaputten, unsichtbaren) Kontur führen. Deshalb hier zuerst
-        // versuchen, sie nur seitlich zu verschieben (Größe bleibt exakt erhalten); reicht auch
-        // das nicht, wird sie GRÖSSENMÄSSIG (Winkel bleibt exakt 60°) auf die eigene
-        // Schichtbreite heruntergerechnet - so bleibt in JEDER Schicht eine gültige, wenn auch
-        // ggf. dünne Zunge/Nut erhalten, statt dass die Schicht komplett ohne Verbindung bleibt.
-        if (dovetailPossible) {
+        if (dovetailPossible && !tabOverride.fixedCenter) {
+            // Standardverhalten (z.B. Bande): auf die jeweilige Schicht anpassen.
             const reach = tabTipHalf + clearance;
             const layerWidth = offsetB - offsetA;
             if (layerWidth < 2 * reach + 0.01) {
@@ -1424,6 +1473,8 @@ function buildSegmentOutline(centerlinePoints, offsetA, offsetB, hasStartNotch, 
                 else if (tabCenterOffset > maxCenter) tabCenterOffset = maxCenter;
             }
         }
+        // fixedCenter (Curb): Größe + Achse bleiben exakt von der VOLLEN Curb-Breite abgeleitet.
+        // Die Überschneidung mit schmaleren Höhenlagen wird weiter unten geometrisch geclippt.
     } else {
         const size = computeTabSize(halfWidth);
         tabHalf = size.tabHalf;
@@ -1452,14 +1503,24 @@ function buildSegmentOutline(centerlinePoints, offsetA, offsetB, hasStartNotch, 
     } else {
         outline.push(edgeA[0]);
         if (effStartNotch) {
-            // Nut über echten Konturversatz berechnet (siehe computeNotchGeometry) - garantiert
-            // überall entlang der Flanke denselben senkrechten 0,2mm-Spalt zur Zunge, nicht nur
-            // bei Breite und Tiefe getrennt.
             const notch = computeNotchGeometry(tabHalf, tabTipHalf, tabLength, clearance);
-            outline.push(offsetPoint(startTabCenter, startNormal, -notch.mouthHalf));
-            outline.push(offsetPoint(offsetPoint(startTabCenter, startNormal, -notch.bottomHalf), startTangent, notch.depth));
-            outline.push(offsetPoint(offsetPoint(startTabCenter, startNormal, notch.bottomHalf), startTangent, notch.depth));
-            outline.push(offsetPoint(startTabCenter, startNormal, notch.mouthHalf));
+            if (tabOverride && tabOverride.fixedCenter) {
+                const poly = [
+                    { l: 0, w: tabCenterOffset - notch.mouthHalf },
+                    { l: notch.depth, w: tabCenterOffset - notch.bottomHalf },
+                    { l: notch.depth, w: tabCenterOffset + notch.bottomHalf },
+                    { l: 0, w: tabCenterOffset + notch.mouthHalf }
+                ];
+                const path = connectorOpenBoundary(poly, offsetA, offsetB);
+                path.forEach(lp => {
+                    outline.push(offsetPoint(offsetPoint(centerlinePoints[0], startNormal, lp.w), startTangent, lp.l));
+                });
+            } else {
+                outline.push(offsetPoint(startTabCenter, startNormal, -notch.mouthHalf));
+                outline.push(offsetPoint(offsetPoint(startTabCenter, startNormal, -notch.bottomHalf), startTangent, notch.depth));
+                outline.push(offsetPoint(offsetPoint(startTabCenter, startNormal, notch.bottomHalf), startTangent, notch.depth));
+                outline.push(offsetPoint(startTabCenter, startNormal, notch.mouthHalf));
+            }
         }
         outline.push(edgeB[0]);
     }
@@ -1478,10 +1539,23 @@ function buildSegmentOutline(centerlinePoints, offsetA, offsetB, hasStartNotch, 
         pushRoundedCap(outline, endRoundCenter, endTangent, endNormal, offsetB - ownCenterOffset, offsetA - ownCenterOffset, 10);
     } else {
         if (effEndTab) {
-            outline.push(offsetPoint(endTabCenter, endNormal, tabHalf));
-            outline.push(offsetPoint(offsetPoint(endTabCenter, endNormal, tabTipHalf), endTangent, tabLength));
-            outline.push(offsetPoint(offsetPoint(endTabCenter, endNormal, -tabTipHalf), endTangent, tabLength));
-            outline.push(offsetPoint(endTabCenter, endNormal, -tabHalf));
+            if (tabOverride && tabOverride.fixedCenter) {
+                const poly = [
+                    { l: 0, w: tabCenterOffset - tabHalf },
+                    { l: tabLength, w: tabCenterOffset - tabTipHalf },
+                    { l: tabLength, w: tabCenterOffset + tabTipHalf },
+                    { l: 0, w: tabCenterOffset + tabHalf }
+                ];
+                const path = connectorOpenBoundary(poly, offsetA, offsetB).reverse(); // außen B -> außen A
+                path.forEach(lp => {
+                    outline.push(offsetPoint(offsetPoint(centerlinePoints[n - 1], endNormal, lp.w), endTangent, lp.l));
+                });
+            } else {
+                outline.push(offsetPoint(endTabCenter, endNormal, tabHalf));
+                outline.push(offsetPoint(offsetPoint(endTabCenter, endNormal, tabTipHalf), endTangent, tabLength));
+                outline.push(offsetPoint(offsetPoint(endTabCenter, endNormal, -tabTipHalf), endTangent, tabLength));
+                outline.push(offsetPoint(endTabCenter, endNormal, -tabHalf));
+            }
         }
         outline.push(edgeA[n - 1]);
     }
@@ -1694,211 +1768,330 @@ function placeInLayout(mesh, bbox) {
     return layoutPlateIndex;
 }
 
-// Curb-Optik: zweifarbige Streifen entlang der Länge + eine gestufte RAMPE quer zur Breite -
-// flach/niedrig auf der Fahrbahnseite (damit das Fahrzeug auffahren kann), hoch auf der
-// Außenseite. Die tragende Schwalbenschwanz-Verbindung sitzt ausschließlich in der (niedrigen,
-// über die volle Breite durchgehenden) Basis; die Rampenstufen sitzen obenauf, ohne eigene
-// Steckverbindung.
+// Curb-Optik: zweifarbige Streifen entlang der Länge + Rampe QUER zur Fahrbahn.
+// Segmentteilungen verändern die Curb-Oberfläche nicht: nach dem Zusammenstecken läuft Profil,
+// Rot/Weiß-Muster und Riefenphase exakt so weiter, als wäre der Curb nie geteilt worden.
 const CURB_STYLE = {
-    stripeLengthMM: 15,           // Länge eines Rot/Weiß-Streifens (an CAD-Vorlage angelehnt)
-    colors: [0xd93a2b, 0xf0f0f0], // Rot / Weiß, alternierend
-    baseHeightRatio: 0.5,         // Anteil der Gesamthöhe für die tragende (flache, volle Breite)
-                                   // Basis.
-    rampSteps: 3,                 // zusätzliche Stufen von der Fahrbahnseite (flach) zur Außenseite (hoch)
-    innerFlatWidthMM: 2,          // Breite ab der Skizzenlinie, die dauerhaft nur Basishöhe hat (0 Stufen)
-    rumbleEnabled: true,          // periodische flache Riefen quer zur Breite für haptisches Feedback
-    rumbleLengthMM: 12,           // Länge eines Riefen-Zyklus (Feld + Lücke)
-    rumbleHeightMM: 0.4,          // wie hoch die Riefe übersteht - bewusst flach gehalten
-    rumbleColor: 0x555555,        // dezentes Grau, unabhängig vom Rot/Weiß-Streifenmuster
-    defaultJointSlopeDeg: 5       // Standard-Neigungswinkel der Auffahrrampe an jeder Segmentgrenze
-                                   // (siehe buildCurbRampMeshes -> buildJointSlopeZone) - über das
-                                   // Eingabefeld "Neigung Enden" im Tab "Bauteil" überschreibbar.
+    stripeLengthMM: 15,          // wird beim Generieren aus dem UI-Wert überschrieben
+    colors: [0xd93a2b, 0xf0f0f0],
+    baseHeightMM: 0.4,           // fester weißer Grundkörper
+    rampSteps: 6,                // Querstufen bleiben unverändert: sie bilden den Curb-Winkel
+    innerFlatWidthMM: 1.0,
+    rumbleEnabled: true,
+    surfaceCellsPerStripe: 2.5,  // halb so viele Längs-Strukturelemente wie zuvor (5 -> 2,5 je Farbblock)
+    rumbleHeightMM: 0.25,
+    rumbleColor: 0x555555,
+    endRiseLengthMM: 28,         // nur an echten Strang-Enden: sanfter Längsanstieg/-abfall
+    endRiseSlices: 10
 };
 
-// Teilt eine Punktreihe in kurze, etwa gleich lange Abschnitte (für die Rot/Weiß-Streifen).
-function splitIntoStripes(points, stripeLengthMM) {
-    if (points.length < 2) return [points];
-    const stripes = [];
-    let current = [points[0]];
-    let currentLen = 0;
-    for (let i = 1; i < points.length; i++) {
-        const segLen = dist(points[i - 1], points[i]);
-        if (currentLen + segLen > stripeLengthMM && current.length > 1) {
-            stripes.push(current);
-            current = [points[i - 1]];
-            currentLen = 0;
-        }
-        current.push(points[i]);
-        currentLen += segLen;
+// Liefert Teilstrecken mit EXAKT global ausgerichteten Grenzen für Farbe/Riefen.
+// globalStartMM ist die Bogenlänge des Segmentanfangs innerhalb des Strangs.
+function splitByGlobalPeriod(points, globalStartMM, periodMM) {
+    const len = polylineLength(points);
+    if (points.length < 2 || len < 1e-6 || periodMM <= 0) return [];
+    const out = [];
+    let local = 0;
+    while (local < len - 1e-6) {
+        const g = globalStartMM + local;
+        const nextBoundary = (Math.floor(g / periodMM) + 1) * periodMM;
+        const localEnd = Math.min(len, local + Math.max(nextBoundary - g, 1e-6));
+        const pts = sliceByArcLength(points, local, localEnd);
+        if (pts.length >= 2) out.push({ points: pts, localStart: local, localEnd });
+        local = localEnd;
     }
-    if (current.length > 1) stripes.push(current);
-    return stripes;
+    return out;
 }
 
-// Baut die gestufte Rampe eines Curb-Segments: mehrere schmale, treppenartig ansteigende
-// Ebenen, die von der Fahrbahnseite (innerBoundary nahe 0, niedrig) zur Außenseite (volle
-// Breite, volle Höhe) reichen - plus die Rot/Weiß-Längsstreifen. outerSign (+1/-1) bestimmt,
-// auf welcher Seite der Skizzenlinie (Normalenrichtung) die Außenkante liegt. hasStartNotch/
-// hasEndTab geben an, ob dort eine Segmentgrenze (mit Zunge/Nut) liegt - nur wenn NICHT, wird
-// das jeweilige Ende abgerundet (echtes Strang-Ende). sharedTab: siehe buildSegmentOutline -
-// EINE gemeinsame Zunge/Nut-Größe+Position (von der vollen Basisbreite abgeleitet, siehe
-// generate3d) für die komplette Bauteilhöhe.
+function smoothStep01(t) {
+    t = Math.max(0, Math.min(1, t));
+    return t * t * (3 - 2 * t);
+}
+
+// Faktor für den sanften Höhenanstieg an den BEIDEN echten Enden eines Strangs.
+// An Segmentteilungen bleibt factor immer 1.0, damit die Geometrie dort unverändert weiterläuft.
+function curbEndRiseFactor(globalD, pathLengthMM) {
+    const L = Math.min(CURB_STYLE.endRiseLengthMM, Math.max(pathLengthMM / 2, 0));
+    if (L < 0.5) return 1;
+    const fromStart = smoothStep01(globalD / L);
+    const fromEnd = smoothStep01((pathLengthMM - globalD) / L);
+    return Math.min(fromStart, fromEnd, 1);
+}
+
+// Schneidet ein konvexes Polygon (hier jeweils EIN Dreieck aus der Triangulierung)
+// anhand des Querwertes u auf [uMin,uMax]. Da nur konvexe Dreiecke geclippt
+// werden, entstehen dabei keine getrennten Polygon-Inseln.
+function clipConvexPolygonByURange(poly, uMin, uMax) {
+    function clipHalf(input, keep, boundary) {
+        if (!input.length) return [];
+        const out = [];
+        for (let i = 0; i < input.length; i++) {
+            const a = input[i];
+            const b = input[(i + 1) % input.length];
+            const ain = keep(a.u), bin = keep(b.u);
+            if (ain && bin) {
+                out.push({ ...b });
+            } else if (ain && !bin) {
+                const du = b.u - a.u;
+                const t = Math.abs(du) < 1e-12 ? 0 : (boundary - a.u) / du;
+                out.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, u: boundary });
+            } else if (!ain && bin) {
+                const du = b.u - a.u;
+                const t = Math.abs(du) < 1e-12 ? 0 : (boundary - a.u) / du;
+                out.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, u: boundary });
+                out.push({ ...b });
+            }
+        }
+        return out;
+    }
+
+    let out = poly.map(v => ({ ...v }));
+    out = clipHalf(out, u => u >= uMin - 1e-8, uMin);
+    out = clipHalf(out, u => u <= uMax + 1e-8, uMax);
+    return out;
+}
+
+// Baut den oberen Curb-Anteil in einer geschützten Steckverbinder-Zone als
+// EINE vollständige 3D-Steckverbindung.
 //
-// WICHTIG: Die Zunge/Nut sitzt NICHT mehr verteilt über mehrere Rampenstufen-Z-Bänder, sondern
-// ausschließlich am äußersten Rand einer eigenen "Neigungs-Rampe" (buildJointSlopeZone) direkt
-// an jeder Segmentgrenze. Diese Neigungs-Rampe läuft über die VOLLE Bauteilbreite (wie die
-// Basis, passend zur mittig zentrierten Zunge) und ihre Höhe steigt vom Bauteilrand (dort:
-// Basishöhe, dort sitzt exakt EINE Zunge/Nut-Schicht) linear bis zur normalen Rampenhöhe an -
-// mit einer über jointSlopeDeg einstellbaren Neigung, damit Fahrzeuge dort nicht an einer
-// abrupten Stufe hängen bleiben. Jenseits dieser Neigungs-Rampe läuft die normale, gestufte
-// Rampenoptik unverändert weiter (dort ohne eigene Steckverbindung).
-function buildCurbRampMeshes(localChunk, thickness, totalHeight, baseHeight, outerSign, stripeOffset, hasStartNotch, hasEndTab, sharedTab, jointSlopeDeg) {
+// Nut/Zapfen werden zuerst über die KOMPLETTE Curb-Breite erzeugt und als
+// zusammenhängende Planform trianguliert. Erst danach werden die Dreiecke auf
+// die sechs Quer-Höhenbänder des Curbs verteilt. So bleiben auch die innen
+// liegenden Bereiche der aufgeweiteten Nut und des breiten Zapfenkopfs erhalten.
+//
+// Die Höhe ändert sich dabei ausschließlich QUER zur Fahrbahn. Zum Gegenstück
+// hin gibt es keinerlei Längs-Abflachung.
+function buildCurbProtectedConnectorUpperMeshes(points, thickness, totalHeight, baseHeight, outerSign,
+                                                 hasStartNotch, hasEndTab, sharedTab, material) {
+    const meshes = [];
+    if (points.length < 2) return meshes;
+
+    const dir = outerSign >= 0 ? 1 : -1;
+    const fullOffsetA = Math.min(0, dir * thickness);
+    const fullOffsetB = Math.max(0, dir * thickness);
+
+    // Genau EINE vollständige Nut/Zapfen-Kontur für diese Teilung.
+    const outline = buildSegmentOutline(
+        points, fullOffsetA, fullOffsetB,
+        hasStartNotch, hasEndTab, false, false, sharedTab
+    );
+    if (outline.length < 3) return meshes;
+
+    const contour = outline.map(p => new THREE.Vector2(p.x, p.y));
+    let triangles;
+    try {
+        triangles = THREE.ShapeUtils.triangulateShape(contour, []);
+    } catch (err) {
+        console.error('Curb-Steckverbinder konnte nicht trianguliert werden', err);
+        return meshes;
+    }
+    if (!triangles || !triangles.length) return meshes;
+
+    // Lokale Querachse der kurzen Steckverbinder-Zone.
+    const first = points[0], last = points[points.length - 1];
+    const dx = last.x - first.x, dy = last.y - first.y;
+    const dlen = Math.hypot(dx, dy) || 1;
+    const tangent = { x: dx / dlen, y: dy / dlen };
+    const normal = { x: -tangent.y, y: tangent.x };
+    const anchor = { x: (first.x + last.x) / 2, y: (first.y + last.y) / 2 };
+
+    function uAt(v) {
+        // u=0: Fahrbahnseite, u=thickness: hohe Außenseite.
+        return dir * ((v.x - anchor.x) * normal.x + (v.y - anchor.y) * normal.y);
+    }
+
+    const rampWidth = Math.max(thickness - CURB_STYLE.innerFlatWidthMM, thickness * 0.3);
+    const stepWidth = rampWidth / CURB_STYLE.rampSteps;
+    const rise = Math.max(totalHeight - baseHeight, 0);
+    const stepHeight = rise / CURB_STYLE.rampSteps;
+    if (stepHeight <= 1e-6) return meshes;
+
+    const tris = triangles.map(face => face.map(idx => {
+        const v = contour[idx];
+        return { x: v.x, y: v.y, u: uAt(v) };
+    }));
+
+    // Disjunkte Querbänder. Ihre Vereinigung entspricht exakt den bisherigen
+    // sechs gestuften Rampenlagen, ohne den Schwalbenschwanz selbst zu zerlegen.
+    for (let step = 1; step <= CURB_STYLE.rampSteps; step++) {
+        const u0 = CURB_STYLE.innerFlatWidthMM + (step - 1) * stepWidth;
+        const u1 = (step === CURB_STYLE.rampSteps)
+            ? thickness + 1e-6
+            : CURB_STYLE.innerFlatWidthMM + step * stepWidth;
+        const upperDepth = step * stepHeight;
+        if (upperDepth <= 1e-6) continue;
+
+        tris.forEach(tri => {
+            const clipped = clipConvexPolygonByURange(tri, u0, u1);
+            if (clipped.length < 3) return;
+
+            const clean = [];
+            clipped.forEach(v => {
+                const prev = clean[clean.length - 1];
+                if (!prev || Math.hypot(v.x - prev.x, v.y - prev.y) > 1e-7) clean.push(v);
+            });
+            if (clean.length > 2 && Math.hypot(clean[0].x - clean[clean.length - 1].x, clean[0].y - clean[clean.length - 1].y) < 1e-7) clean.pop();
+            if (clean.length < 3) return;
+
+            const shape = new THREE.Shape(clean.map(v => new THREE.Vector2(v.x, v.y)));
+            try {
+                const geometry = new THREE.ExtrudeGeometry(shape, {
+                    depth: upperDepth, bevelEnabled: false, steps: 1
+                });
+                geometry.translate(0, 0, baseHeight);
+                meshes.push(new THREE.Mesh(geometry, material));
+            } catch (err) {
+                console.error('Curb-Steckverbinder-Band übersprungen', err);
+            }
+        });
+    }
+
+    return meshes;
+}
+
+// Curb-Rampenstufen. Der Winkel ist jetzt ausschließlich die QUERNEIGUNG des Curbs.
+// Dovetail/Schwalbenschwanz wird hier NICHT verändert.
+function buildCurbRampMeshes(localChunk, thickness, totalHeight, baseHeight, outerSign,
+                             globalStartMM, pathLengthMM, hasStartNotch, hasEndTab,
+                             sharedTab) {
     const meshes = [];
     const dir = outerSign >= 0 ? 1 : -1;
     const rampWidth = Math.max(thickness - CURB_STYLE.innerFlatWidthMM, thickness * 0.3);
     const stepWidth = rampWidth / CURB_STYLE.rampSteps;
-    const stepHeight = (totalHeight - baseHeight) / CURB_STYLE.rampSteps;
-    const fullOffsetA = Math.min(0, dir * thickness);
-    const fullOffsetB = Math.max(0, dir * thickness);
+
+    // Die Querneigung ergibt sich ausschließlich aus Höhe und Tiefe des Curbs.
+    // Der weiße Grundkörper bleibt immer 0,4 mm hoch; darüber wird die eingestellte
+    // Gesamthöhe gleichmäßig auf die vorhandenen Quer-Stufen verteilt.
+    const rise = Math.max(totalHeight - baseHeight, 0);
+    const stepHeight = rise / CURB_STYLE.rampSteps;
     const chunkLen = polylineLength(localChunk);
 
-    // Farbe an einer gegebenen Bogenlänge entlang DIESES Chunks - ersetzt die bisherige, rein
-    // indexbasierte (stripeOffset+i)-Formel durch eine bogenlängenbasierte Variante, damit das
-    // Rot/Weiß-Muster auch dann nahtlos weiterläuft, wenn (wie jetzt) die Neigungs-Rampe und der
-    // restliche Bereich unabhängig voneinander in Scheiben zerlegt werden.
-    function colorAt(dAlongChunk) {
-        const raw = stripeOffset + Math.floor(dAlongChunk / CURB_STYLE.stripeLengthMM);
-        const n = CURB_STYLE.colors.length;
-        return CURB_STYLE.colors[((raw % n) + n) % n];
+    const surfaceCellMM = CURB_STYLE.stripeLengthMM / CURB_STYLE.surfaceCellsPerStripe;
+
+    // WICHTIG FUER DIE STECKVERBINDUNG:
+    // Farbe und Oberflaechenraster duerfen die Geometrie der Nut/Zunge NICHT begrenzen.
+    // Besonders die Nut ragt um ihre komplette Tiefe in das Bauteil hinein. Wenn ein Farb-
+    // oder Strukturblock kuerzer als diese Tiefe ist, wuerde ein normales Aufteilen die Nut
+    // mitten im Schwalbenschwanz abschneiden. Deshalb werden an Segmentgrenzen geschuetzte
+    // Laengszonen erzeugt, die mindestens die komplette Steckverbindung enthalten. Erst
+    // ausserhalb dieser Zonen darf wieder nach Farbe/Struktur gesplittet werden.
+    const notchGeom = computeNotchGeometry(
+        sharedTab.tabHalf, sharedTab.tabTipHalf, sharedTab.tabLength, DOVETAIL.clearance
+    );
+    const connectorSafeMM = Math.max(notchGeom.depth, sharedTab.tabLength) + 0.6;
+    const startProtectedMM = hasStartNotch ? Math.min(connectorSafeMM, chunkLen) : 0;
+    const endProtectedMM = hasEndTab ? Math.min(connectorSafeMM, Math.max(chunkLen - startProtectedMM, 0)) : 0;
+
+    const stripePieces = [];
+
+    // Geschuetzte Nut-Zone am Segmentanfang: ein einziges zusammenhaengendes Stueck.
+    if (startProtectedMM > 0.05) {
+        const pts = sliceByArcLength(localChunk, 0, startProtectedMM);
+        if (pts.length >= 2) stripePieces.push({
+            points: pts, localStart: 0, localEnd: startProtectedMM, protectedStart: true, protectedEnd: false
+        });
     }
 
-    // Rampen-Länge aus dem Neigungswinkel: rise/tan(Winkel) - je flacher der Winkel, desto
-    // länger die Auffahrrampe. Auf maximal die halbe (bei Nut UND Zapfen) bzw. fast die ganze
-    // (bei nur einem von beiden) Chunk-Länge begrenzt, damit auch kurze Segmente nicht überlaufen.
-    const rise = Math.max(totalHeight - baseHeight, 0);
-    const slopeDeg = Math.max(jointSlopeDeg || CURB_STYLE.defaultJointSlopeDeg, 0.5);
-    const rawTaperLength = rise > 0.01 ? rise / Math.tan(slopeDeg * Math.PI / 180) : 0;
-    const maxTaperEach = (hasStartNotch && hasEndTab) ? Math.max(chunkLen / 2 - 1, 0) : Math.max(chunkLen - 1, 0);
-    const taperLengthMM = Math.min(rawTaperLength, maxTaperEach);
-
-    // Baut die Neigungs-Rampe an EINEM Segmentende (isStart=true: Nut bei d=0: isStart=false:
-    // Zapfen bei d=chunkLen). Mehrere dünne Längs-Scheiben, jede über die volle Bauteilbreite,
-    // deren Höhe von der Bauteilkante (Basishöhe) zum Rampen-Inneren (volle Rampenhöhe) linear
-    // ansteigt - die Zunge/Nut sitzt ausschließlich in der äußersten (der Kante zugewandten)
-    // Scheibe.
-    function buildJointSlopeZone(isStart) {
-        if (taperLengthMM < 0.5) return;
-        const zoneStartD = isStart ? 0 : chunkLen - taperLengthMM;
-        const zoneEndD = isStart ? taperLengthMM : chunkLen;
-
-        const numSlices = Math.min(Math.max(Math.ceil(taperLengthMM / 2), 3), 12);
-        for (let s = 0; s < numSlices; s++) {
-            const t0 = s / numSlices, t1 = (s + 1) / numSlices;
-            const dA = zoneStartD + (zoneEndD - zoneStartD) * t0;
-            const dB = zoneStartD + (zoneEndD - zoneStartD) * t1;
-            const slicePts = sliceByArcLength(localChunk, dA, dB);
-            if (slicePts.length < 2) continue;
-
-            // Abstand der (der Bauteilkante zugewandten) Scheibenseite von der Segmentgrenze -
-            // 0 direkt an der Kante (-> Basishöhe), taperLengthMM am rampenseitigen Ende (->
-            // volle Rampenhöhe).
-            const edgeD = isStart ? dA : dB;
-            const distFromJoint = isStart ? edgeD : (chunkLen - edgeD);
-            const localHeight = taperLengthMM > 0
-                ? baseHeight + Math.min(distFromJoint / taperLengthMM, 1) * rise
-                : totalHeight;
-
-            const sliceHasStartNotch = isStart && s === 0 && hasStartNotch;
-            const sliceHasEndTab = !isStart && s === numSlices - 1 && hasEndTab;
-
-            const outline = buildSegmentOutline(slicePts, fullOffsetA, fullOffsetB, sliceHasStartNotch, sliceHasEndTab, false, false, sharedTab);
-            if (outline.length < 3) continue;
-            const shape = new THREE.Shape(outline.map(p => new THREE.Vector2(p.x, p.y)));
-            const midD = (dA + dB) / 2;
-            const material = new THREE.MeshStandardMaterial({ color: colorAt(midD), roughness: 0.8 });
-            try {
-                const geometry = new THREE.ExtrudeGeometry(shape, { depth: Math.max(localHeight, 0.05), bevelEnabled: false, steps: 1 });
-                meshes.push(new THREE.Mesh(geometry, material));
-            } catch (err) {
-                console.error('Curb-Neigungsrampe übersprungen (ungültige Geometrie)', err);
-            }
-        }
+    // Normaler Mittelbereich: hier duerfen Farbwechsel wieder exakt global ausgerichtet sein.
+    const middleStart = startProtectedMM;
+    const middleEnd = Math.max(middleStart, chunkLen - endProtectedMM);
+    if (middleEnd - middleStart > 0.05) {
+        const midPts = sliceByArcLength(localChunk, middleStart, middleEnd);
+        splitByGlobalPeriod(midPts, globalStartMM + middleStart, CURB_STYLE.stripeLengthMM).forEach(mp => {
+            stripePieces.push({
+                points: mp.points,
+                localStart: middleStart + mp.localStart,
+                localEnd: middleStart + mp.localEnd,
+                protectedStart: false,
+                protectedEnd: false
+            });
+        });
     }
 
-    if (hasStartNotch) buildJointSlopeZone(true);
-    if (hasEndTab) buildJointSlopeZone(false);
+    // Geschuetzte Zapfen-Zone am Segmentende. Auch sie bleibt als Geometrieblock zusammen.
+    if (endProtectedMM > 0.05) {
+        const z0 = Math.max(startProtectedMM, chunkLen - endProtectedMM);
+        const pts = sliceByArcLength(localChunk, z0, chunkLen);
+        if (pts.length >= 2) stripePieces.push({
+            points: pts, localStart: z0, localEnd: chunkLen, protectedStart: false, protectedEnd: true
+        });
+    }
 
-    // Normale gestufte Rampe für den restlichen (nicht von einer Neigungs-Rampe belegten)
-    // Bereich - unverändert zur bisherigen Optik, aber ohne eigene Zunge/Nut (die sitzt jetzt
-    // ausschließlich in den Neigungs-Rampen oben).
-    const midStartD = hasStartNotch ? taperLengthMM : 0;
-    const midEndD = hasEndTab ? chunkLen - taperLengthMM : chunkLen;
-    if (midEndD - midStartD < 0.5) return meshes;
+    // Bei einem extrem kurzen Segment koennen sich die Schutzzonen praktisch beruehren.
+    // Falls dadurch nichts erzeugt wurde, das komplette Segment als einen sicheren Block nehmen.
+    if (stripePieces.length === 0 && chunkLen > 0.05) {
+        stripePieces.push({
+            points: localChunk, localStart: 0, localEnd: chunkLen,
+            protectedStart: hasStartNotch, protectedEnd: hasEndTab
+        });
+    }
 
-    const midPts = sliceByArcLength(localChunk, midStartD, midEndD);
-    const stripes = splitIntoStripes(midPts, CURB_STYLE.stripeLengthMM);
-    let stripeAcc = midStartD;
-
-    stripes.forEach((stripePts, i) => {
-        if (stripePts.length < 2) { return; }
-        const stripeStartD = stripeAcc;
-        const color = colorAt(stripeStartD);
+    stripePieces.forEach(piece => {
+        const globalMid = globalStartMM + (piece.localStart + piece.localEnd) / 2;
+        const stripeIndex = Math.floor(globalMid / CURB_STYLE.stripeLengthMM);
+        const color = CURB_STYLE.colors[((stripeIndex % CURB_STYLE.colors.length) + CURB_STYLE.colors.length) % CURB_STYLE.colors.length];
         const material = new THREE.MeshStandardMaterial({ color, roughness: 0.8 });
-        stripeAcc += polylineLength(stripePts);
 
-        // Echtes Strang-Ende (keine Segmentgrenze, also auch keine Neigungs-Rampe davor) wird
-        // weiterhin abgerundet statt gerade abgeschnitten.
-        const roundStart = i === 0 && !hasStartNotch;
-        const roundEnd = i === stripes.length - 1 && !hasEndTab;
+        // Längsstruktur: exakt halb so dicht wie die frühere 5-Felder-pro-Farbblock-Teilung.
+        // Die Quer-Stufen (rampSteps), welche die Curb-Neigung bilden, bleiben davon unberührt.
+        const smallPieces = (CURB_STYLE.rumbleEnabled && !piece.protectedStart && !piece.protectedEnd)
+            ? splitByGlobalPeriod(piece.points, globalStartMM + piece.localStart, surfaceCellMM)
+            : [{ points: piece.points, localStart: 0, localEnd: polylineLength(piece.points) }];
 
-        for (let step = 1; step <= CURB_STYLE.rampSteps; step++) {
-            // Jede Stufe beginnt weiter außen (vom Fahrbahnrand weg) als die vorherige und
-            // reicht bis zur vollen Außenkante - klassische Treppen-Verschachtelung.
-            const innerBoundary = dir * (CURB_STYLE.innerFlatWidthMM + (step - 1) * stepWidth);
-            const outerBoundary = dir * thickness;
-            const offsetA = Math.min(innerBoundary, outerBoundary);
-            const offsetB = Math.max(innerBoundary, outerBoundary);
-            const zOffset = baseHeight + (step - 1) * stepHeight;
+        smallPieces.forEach(rp => {
+            if (rp.points.length < 2) return;
+            const rpGlobalStart = globalStartMM + piece.localStart + rp.localStart;
+            const rpGlobalEnd = globalStartMM + piece.localStart + rp.localEnd;
+            const rpGlobalMid = (rpGlobalStart + rpGlobalEnd) / 2;
+            const cellIndex = Math.floor(rpGlobalMid / surfaceCellMM);
+            const isRidge = CURB_STYLE.rumbleEnabled && (cellIndex % 2 === 0);
+            const riseFactor = curbEndRiseFactor(rpGlobalMid, pathLengthMM);
 
-            if (!CURB_STYLE.rumbleEnabled) {
-                const outline = buildSegmentOutline(stripePts, offsetA, offsetB, false, false, roundStart, roundEnd, sharedTab);
+            // Nur das Teilstück, das direkt an einer Segmentteilung liegt, trägt Nut/Zapfen.
+            // Dadurch wird pro Unterbrechung genau EIN gemeinsamer Schwalbenschwanz erzeugt.
+            const pieceTouchesStart = hasStartNotch && piece.protectedStart && rp.localStart < 0.05;
+            const pieceTouchesEnd = hasEndTab && piece.protectedEnd && (polylineLength(piece.points) - rp.localEnd) < 0.05;
+
+            // In der Steckverbinder-Zone wird die vollständige Nut/Zapfen-Planform
+            // zuerst über die volle Curb-Breite trianguliert und ERST DANACH an die
+            // sechs Querhöhen angepasst. Dadurch bleibt die Steckverbindung vollständig.
+            if (piece.protectedStart || piece.protectedEnd) {
+                const connectorMeshes = buildCurbProtectedConnectorUpperMeshes(
+                    rp.points, thickness, totalHeight, baseHeight, outerSign,
+                    pieceTouchesStart, pieceTouchesEnd, sharedTab, material
+                );
+                connectorMeshes.forEach(m => meshes.push(m));
+                return;
+            }
+
+            // Außerhalb der Steckverbinder-Zonen bleibt die vorhandene Oberflächenstruktur
+            // unverändert. Dort gibt es bewusst keine Nut/Zapfen-Geometrie.
+            for (let step = 1; step <= CURB_STYLE.rampSteps; step++) {
+                const innerBoundary = dir * (CURB_STYLE.innerFlatWidthMM + (step - 1) * stepWidth);
+                const outerBoundary = dir * thickness;
+                const offsetA = Math.min(innerBoundary, outerBoundary);
+                const offsetB = Math.max(innerBoundary, outerBoundary);
+                const zOffset = baseHeight + (step - 1) * stepHeight * riseFactor;
+                const extra = isRidge ? CURB_STYLE.rumbleHeightMM * riseFactor : 0;
+                const h = Math.max(stepHeight * riseFactor + extra, 0.03);
+
+                const roundStart = !hasStartNotch && rpGlobalStart < 0.05;
+                const roundEnd = !hasEndTab && (pathLengthMM - rpGlobalEnd) < 0.05;
+                const outline = buildSegmentOutline(
+                    rp.points, offsetA, offsetB, false, false,
+                    roundStart, roundEnd, sharedTab
+                );
                 if (outline.length < 3) continue;
                 const shape = new THREE.Shape(outline.map(p => new THREE.Vector2(p.x, p.y)));
                 try {
-                    const geometry = new THREE.ExtrudeGeometry(shape, { depth: stepHeight, bevelEnabled: false, steps: 1 });
+                    const geometry = new THREE.ExtrudeGeometry(shape, { depth: h, bevelEnabled: false, steps: 1 });
                     geometry.translate(0, 0, zOffset);
                     meshes.push(new THREE.Mesh(geometry, material));
                 } catch (err) {
-                    console.error('Curb-Rampenstufe übersprungen (ungültige Geometrie)', err);
+                    console.error('Curb-Rampenstück übersprungen (ungültige Geometrie)', err);
                 }
-                continue;
             }
-
-            // Riefen für haptisches Feedback: die Stufe wird zusätzlich in kurze Abschnitte
-            // unterteilt, die abwechselnd normal hoch und um rumbleHeightMM höher sind - IMMER
-            // mit derselben Breite/Position wie diese Stufe UND derselben Streifenfarbe. Dadurch
-            // folgen die Riefen exakt der Treppen-/Schrägform (keine schwebende Platte mehr) und
-            // unterbrechen das Rot/Weiß-Muster nicht.
-            const rumbleSegs = splitIntoStripes(stripePts, CURB_STYLE.rumbleLengthMM);
-            rumbleSegs.forEach((segPts, si) => {
-                if (segPts.length < 2) return;
-                const segRoundStart = si === 0 && roundStart;
-                const segRoundEnd = si === rumbleSegs.length - 1 && roundEnd;
-                const isRidge = si % 2 === 0;
-                const segHeight = stepHeight + (isRidge ? CURB_STYLE.rumbleHeightMM : 0);
-
-                const outline = buildSegmentOutline(segPts, offsetA, offsetB, false, false, segRoundStart, segRoundEnd, sharedTab);
-                if (outline.length < 3) return;
-                const shape = new THREE.Shape(outline.map(p => new THREE.Vector2(p.x, p.y)));
-                try {
-                    const geometry = new THREE.ExtrudeGeometry(shape, { depth: segHeight, bevelEnabled: false, steps: 1 });
-                    geometry.translate(0, 0, zOffset);
-                    meshes.push(new THREE.Mesh(geometry, material));
-                } catch (err) {
-                    console.error('Curb-Riefen-Segment übersprungen (ungültige Geometrie)', err);
-                }
-            });
-        }
+        });
     });
 
     return meshes;
@@ -2024,14 +2217,15 @@ function generate3DModel() {
 
     // Curb: Höhe/Tiefe kommen aus den eigenen Eingabefeldern (überschreiben den Profil-Default),
     // damit sie an die eigene Bodenfreiheit/das eigene Fahrzeug angepasst werden können.
-    let curbJointSlopeDeg = CURB_STYLE.defaultJointSlopeDeg;
+    let curbPatternLengthMM = CURB_STYLE.stripeLengthMM;
     if (elementTypeValue === 'curb') {
         const curbHeightInput = parseFloat((document.getElementById('curbHeight').value || '').toString().replace(',', '.'));
         const curbDepthInput = parseFloat((document.getElementById('curbDepth').value || '').toString().replace(',', '.'));
-        const curbJointSlopeInput = parseFloat((document.getElementById('curbJointSlope')?.value || '').toString().replace(',', '.'));
+        const curbPatternInput = parseFloat((document.getElementById('curbPatternLength')?.value || '').toString().replace(',', '.'));
         if (curbHeightInput > 0) profile.height = curbHeightInput;
         if (curbDepthInput > 0) profile.thickness = curbDepthInput;
-        if (curbJointSlopeInput > 0) curbJointSlopeDeg = curbJointSlopeInput;
+        if (curbPatternInput >= 5) curbPatternLengthMM = curbPatternInput;
+        CURB_STYLE.stripeLengthMM = curbPatternLengthMM;
     } else if (elementTypeValue === 'bande') {
         const bandeHeightInput = parseFloat((document.getElementById('bandeHeight').value || '').toString().replace(',', '.'));
         const bandeThicknessInput = parseFloat((document.getElementById('bandeThickness').value || '').toString().replace(',', '.'));
@@ -2044,7 +2238,7 @@ function generate3DModel() {
     resetLayoutCursor();
 
     let segmentCounter = 0;
-    let globalStripeIndex = 0; // fortlaufender Zähler für ein durchgängiges Streifenmuster
+    
 
     paths.forEach((path, pathIndex) => {
         const pathPoints = path.points;
@@ -2052,6 +2246,8 @@ function generate3DModel() {
         const chunks = splitPathIntoSegments(pathPoints);
         const isCurb = elementTypeValue === 'curb';
         const outerSign = path.outerSign >= 0 ? 1 : -1;
+        const pathLengthMM = chunks.reduce((sum, c) => sum + polylineLength(c), 0);
+        let pathArcOffsetMM = 0;
 
         chunks.forEach((chunk, chunkIndex) => {
             const hasStartNotch = chunkIndex > 0;
@@ -2073,7 +2269,7 @@ function generate3DModel() {
             const partGroup = new THREE.Group();
 
             if (isCurb) {
-                const bodyHeight = profile.height * CURB_STYLE.baseHeightRatio;
+                const bodyHeight = CURB_STYLE.baseHeightMM;
                 // Curb: die Skizzenlinie IST die Fahrbahnkante (innen, Offset 0) - das Material
                 // liegt komplett auf der outerSign-Seite davon.
                 const offsetA = Math.min(0, outerSign * profile.thickness);
@@ -2090,7 +2286,8 @@ function generate3DModel() {
                     tabTipHalf: tabSize.tabTipHalf,
                     tabLength: tabSize.tabLength,
                     possible: tabSize.possible,
-                    anchorOffset: (offsetA + offsetB) / 2
+                    anchorOffset: (offsetA + offsetB) / 2,
+                    fixedCenter: true
                 };
 
                 // Die flache Basis selbst trägt KEINE eigene Nut/Zapfen mehr (unconditional false)
@@ -2099,7 +2296,7 @@ function generate3DModel() {
                 // geschnittene Geometrie an derselben Stelle wird so vermieden).
                 let outline;
                 try {
-                    outline = buildSegmentOutline(localChunk, offsetA, offsetB, false, false, roundStart, roundEnd, sharedTab);
+                    outline = buildSegmentOutline(localChunk, offsetA, offsetB, hasStartNotch, hasEndTab, roundStart, roundEnd, sharedTab);
                 } catch (err) {
                     console.error('Fehler beim Erzeugen des Umrisses', err);
                     return;
@@ -2118,9 +2315,8 @@ function generate3DModel() {
                     }
                 }
 
-                const rampMeshes = buildCurbRampMeshes(localChunk, profile.thickness, profile.height, bodyHeight, outerSign, globalStripeIndex, hasStartNotch, hasEndTab, sharedTab, curbJointSlopeDeg);
+                const rampMeshes = buildCurbRampMeshes(localChunk, profile.thickness, profile.height, bodyHeight, outerSign, pathArcOffsetMM, pathLengthMM, hasStartNotch, hasEndTab, sharedTab);
                 rampMeshes.forEach(m => partGroup.add(m));
-                globalStripeIndex += splitIntoStripes(localChunk, CURB_STYLE.stripeLengthMM).length;
             } else {
                 // Bande: gestufte, sich nach oben verjüngende Beton-Leitwand-Form (symmetrisch
                 // um die Skizzenlinie), jede Stufe mit eigener Zunge/Nut.
@@ -2128,6 +2324,7 @@ function generate3DModel() {
                 bandeMeshes.forEach(m => partGroup.add(m));
             }
 
+            pathArcOffsetMM += polylineLength(chunk);
             if (partGroup.children.length === 0) return;
 
             const bbox = new THREE.Box3().setFromObject(partGroup);
@@ -2445,7 +2642,7 @@ function saveProject() {
         elementType: document.getElementById('elementType').value,
         curbHeight: document.getElementById('curbHeight').value,
         curbDepth: document.getElementById('curbDepth').value,
-        curbJointSlope: document.getElementById('curbJointSlope')?.value,
+        curbPatternLength: document.getElementById('curbPatternLength')?.value,
         bandeHeight: document.getElementById('bandeHeight').value,
         bandeThickness: document.getElementById('bandeThickness').value,
         bedWidth: document.getElementById('bedWidth').value,
@@ -2475,7 +2672,7 @@ function applyProjectData(data) {
     document.getElementById('elementType').value = data.elementType ?? 'bande';
     document.getElementById('curbHeight').value = data.curbHeight ?? '2';
     document.getElementById('curbDepth').value = data.curbDepth ?? '20';
-    if (document.getElementById('curbJointSlope')) document.getElementById('curbJointSlope').value = data.curbJointSlope ?? '5';
+    if (document.getElementById('curbPatternLength')) document.getElementById('curbPatternLength').value = data.curbPatternLength ?? '15';
     document.getElementById('bandeHeight').value = data.bandeHeight ?? '15';
     document.getElementById('bandeThickness').value = data.bandeThickness ?? '10';
     document.getElementById('bedWidth').value = data.bedWidth ?? '250';
@@ -2512,7 +2709,7 @@ function autosave() {
             elementType: document.getElementById('elementType')?.value,
             curbHeight: document.getElementById('curbHeight')?.value,
             curbDepth: document.getElementById('curbDepth')?.value,
-            curbJointSlope: document.getElementById('curbJointSlope')?.value,
+            curbPatternLength: document.getElementById('curbPatternLength')?.value,
             bandeHeight: document.getElementById('bandeHeight')?.value,
             bandeThickness: document.getElementById('bandeThickness')?.value,
             bedWidth: document.getElementById('bedWidth')?.value,

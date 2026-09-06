@@ -39,22 +39,6 @@ der vorherigen schriftlichen Zustimmung von DesignLab.
 
 ---
 
-## Bestellung und Kontakt
-
-Der Konfigurator befindet sich in einer Beta-Phase und ist derzeit nicht direkt
-mit dem Warenkorb des Onlineshops verbunden.
-
-Konfigurationen können über die erzeugte Stückliste zusammengestellt oder per
-E-Mail an DesignLab übermittelt werden.
-
-**Kontakt:**  
-design_lab@gmx.de
-
-**ModuDisplays im DesignLab-Shop:**  
-https://www.designlab-shop.de/shop/modudisplays/
-
----
-
 ## Nutzungserlaubnis anfragen
 
 Wenn Sie Teile dieses Projekts, Quellcode, Bilder, Produktdaten oder

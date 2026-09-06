@@ -245,6 +245,10 @@ let generatedPreview = null;
 let scene, camera, renderer, controls, trackGroup, trackPreviewGroup, trackSurfaceGroup;
 let generatedSegments = []; // Metadaten + Meshes der zuletzt generierten Teile
 let viewportMode = '2d';
+let mobileWorkflowStep = 'track';
+let mobileSketchCoachDismissed = false;
+let pendingExportAction = null;
+let donationPromptShownThisSession = false;
 let trackLengthMM = 2700;
 let trackWidthMM = 1500;
 
@@ -264,6 +268,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setViewportMode('2d');
     updateMeasureStatus();
     tryRestoreAutosave();
+    setupAppModals();
 });
 
 // --- 3. STRECKEN-AUSWAHL: HERSTELLER -> STRECKE ---
@@ -413,6 +418,7 @@ function loadPresetImage(filename) {
         resetZoomAndPan();
         redraw2DCanvas();
         updateTrackPreviewSurface();
+        updateMobileWorkflowUI();
         autosave();
     };
 
@@ -835,6 +841,7 @@ function updateSketchStatus() {
     } else {
         el.textContent = `Fertige Stränge: ${paths.length}. Aktueller Strang: ${currentPath.length} Punkt(e) - Doppelklick/Enter/Häkchen zum Abschließen.`;
     }
+    updateMobileWorkflowUI();
 }
 
 // Sucht den nächstgelegenen Skizzenpunkt (fertige Stränge + aktueller Strang) in der Nähe
@@ -1014,19 +1021,33 @@ function setupTabs() {
     });
 }
 
-function setMobileSection(section) {
-    const allowed = ['draw', 'model', 'preview', 'export'];
-    const next = allowed.includes(section) ? section : 'draw';
-    document.body.classList.remove('mview-draw', 'mview-model', 'mview-preview', 'mview-export');
-    document.body.classList.add('mview-' + next);
-    document.querySelectorAll('.mnav-btn').forEach(b => {
-        b.classList.toggle('active', b.dataset.mobileSection === next);
-    });
+function isMobileLayout() {
+    return !!(window.matchMedia && window.matchMedia('(max-width: 900px)').matches);
+}
 
-    if (next === 'draw') {
+const MOBILE_STEP_ORDER = ['track', 'draw', 'model', 'preview', 'export'];
+const MOBILE_STEP_META = {
+    track: { label: '1 / 5 · Strecke', next: 'Weiter: Skizzieren' },
+    draw: { label: '2 / 5 · Skizzieren', next: 'Weiter: Bauteil' },
+    model: { label: '3 / 5 · Bauteil', next: '' },
+    preview: { label: '4 / 5 · 3D prüfen', next: 'Weiter: Export' },
+    export: { label: '5 / 5 · Export', next: '' }
+};
+
+function setMobileWorkflowStep(step, options = {}) {
+    const next = MOBILE_STEP_ORDER.includes(step) ? step : 'track';
+    mobileWorkflowStep = next;
+    document.body.classList.remove(...MOBILE_STEP_ORDER.map(s => 'mstep-' + s));
+    document.body.classList.add('mstep-' + next);
+
+    if (next === 'track') {
+        activateWorkflowTab('sketch', false);
+        setViewportMode('2d', false);
+    } else if (next === 'draw') {
         activateWorkflowTab('sketch', false);
         setViewportMode('2d', false);
         setTimeout(() => { resizeCanvasToDisplaySize(); redraw2DCanvas(); }, 30);
+        if (!mobileSketchCoachDismissed && !options.skipCoach) showMobileSketchCoach(true);
     } else if (next === 'model') {
         activateWorkflowTab('part', false);
     } else if (next === 'preview') {
@@ -1035,7 +1056,59 @@ function setMobileSection(section) {
         setTimeout(() => { resizeThreeRendererToContainer(); fitCameraToScene('track'); }, 30);
     } else if (next === 'export') {
         activateWorkflowTab('export', false);
+        setViewportMode('layout3d', false);
     }
+
+    setMobileSidebarOpen(false);
+    updateMobileWorkflowUI();
+}
+
+function showMobileSketchCoach(show) {
+    const coach = document.getElementById('mobileSketchCoach');
+    if (!coach) return;
+    coach.hidden = !show;
+}
+
+function updateMobileWorkflowUI() {
+    if (!isMobileLayout()) return;
+    const stepEl = document.getElementById('mobileFlowStep');
+    const backBtn = document.getElementById('mobileFlowBack');
+    const nextBtn = document.getElementById('mobileFlowNext');
+    const meta = MOBILE_STEP_META[mobileWorkflowStep] || MOBILE_STEP_META.track;
+    if (stepEl) stepEl.textContent = meta.label;
+    if (backBtn) {
+        backBtn.hidden = mobileWorkflowStep === 'track';
+        backBtn.disabled = mobileWorkflowStep === 'track';
+    }
+    if (nextBtn) {
+        nextBtn.hidden = !meta.next;
+        nextBtn.textContent = meta.next || 'Weiter';
+        if (mobileWorkflowStep === 'track') nextBtn.disabled = !bgImage;
+        else if (mobileWorkflowStep === 'draw') nextBtn.disabled = paths.length === 0;
+        else if (mobileWorkflowStep === 'preview') nextBtn.disabled = generatedSegments.length === 0;
+        else nextBtn.disabled = false;
+    }
+}
+
+function mobileWorkflowNext() {
+    if (mobileWorkflowStep === 'track') {
+        if (!bgImage) return;
+        setMobileWorkflowStep('draw');
+    } else if (mobileWorkflowStep === 'draw') {
+        if (!paths.length) return;
+        setMobileWorkflowStep('model');
+    } else if (mobileWorkflowStep === 'preview') {
+        if (!generatedSegments.length) return;
+        setMobileWorkflowStep('export');
+    }
+}
+
+function mobileWorkflowBack() {
+    const idx = MOBILE_STEP_ORDER.indexOf(mobileWorkflowStep);
+    if (idx <= 0) return;
+    const target = MOBILE_STEP_ORDER[idx - 1];
+    // Vom 3D-Schritt zurück zu den Bauteilmaßen, von Export zurück in die 3D-Prüfung.
+    setMobileWorkflowStep(target, { skipCoach: true });
 }
 
 function setMobileSidebarOpen(open) {
@@ -1045,6 +1118,7 @@ function setMobileSidebarOpen(open) {
     if (toggle) {
         toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
         toggle.classList.toggle('active-menu', isOpen);
+        toggle.textContent = isOpen ? '✕' : '☰';
     }
     const backdrop = document.getElementById('mobileSidebarBackdrop');
     if (backdrop) backdrop.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
@@ -1055,13 +1129,6 @@ function toggleMobileSidebar() {
 }
 
 function setupMobileNav() {
-    document.querySelectorAll('.mnav-btn[data-mobile-section]').forEach(btn => {
-        btn.addEventListener('click', () => {
-            setMobileSidebarOpen(false);
-            setMobileSection(btn.dataset.mobileSection);
-        });
-    });
-
     const sidebarToggle = document.getElementById('mobileSidebarToggle');
     if (sidebarToggle) sidebarToggle.addEventListener('click', toggleMobileSidebar);
     const sidebarClose = document.getElementById('mobileSidebarClose');
@@ -1069,22 +1136,30 @@ function setupMobileNav() {
     const backdrop = document.getElementById('mobileSidebarBackdrop');
     if (backdrop) backdrop.addEventListener('click', () => setMobileSidebarOpen(false));
 
-    // Im mobilen Drawer darf ein Klick auf einen Workflow-Reiter direkt die passende
-    // Ansicht aktivieren und schließt anschließend den Drawer wieder.
     document.querySelectorAll('#tabBar .tab-btn').forEach(btn => {
         btn.addEventListener('click', () => {
-            if (window.matchMedia('(max-width: 900px)').matches) {
-                setMobileSidebarOpen(false);
-                const mobileSection = btn.dataset.tab === 'sketch' ? 'draw' : btn.dataset.tab === 'part' ? 'model' : 'export';
-                setMobileSection(mobileSection);
-            }
+            if (!isMobileLayout()) return;
+            setMobileSidebarOpen(false);
+            if (btn.dataset.tab === 'sketch') setMobileWorkflowStep(bgImage ? 'draw' : 'track', { skipCoach: true });
+            else if (btn.dataset.tab === 'part') setMobileWorkflowStep('model');
+            else setMobileWorkflowStep('export');
         });
     });
 
     const mobileSaveBtn = document.getElementById('mobileSaveBtn');
     if (mobileSaveBtn) mobileSaveBtn.addEventListener('click', saveProject);
+    const flowNext = document.getElementById('mobileFlowNext');
+    if (flowNext) flowNext.addEventListener('click', mobileWorkflowNext);
+    const flowBack = document.getElementById('mobileFlowBack');
+    if (flowBack) flowBack.addEventListener('click', mobileWorkflowBack);
+    const coachOk = document.getElementById('mobileSketchCoachOk');
+    if (coachOk) coachOk.addEventListener('click', () => {
+        mobileSketchCoachDismissed = true;
+        showMobileSketchCoach(false);
+    });
+
     setMobileSidebarOpen(false);
-    setMobileSection('draw');
+    if (isMobileLayout()) setMobileWorkflowStep('track', { skipCoach: true });
 }
 
 function resizeThreeRendererToContainer() {
@@ -1160,6 +1235,7 @@ function setupEventListeners() {
             bgImage = null;
             resetZoomAndPan();
             redraw2DCanvas();
+            updateMobileWorkflowUI();
             autosave();
         });
     }
@@ -1271,10 +1347,10 @@ function setupEventListeners() {
     if (generateBtn) generateBtn.addEventListener('click', generate3DModel);
 
     const exportBtn = document.getElementById('exportStl');
-    if (exportBtn) exportBtn.addEventListener('click', exportAllSTL);
+    if (exportBtn) exportBtn.addEventListener('click', () => requestExportWithDonation('stl'));
 
     const export3mfBtn = document.getElementById('export3mf');
-    if (export3mfBtn) export3mfBtn.addEventListener('click', exportColored3MF);
+    if (export3mfBtn) export3mfBtn.addEventListener('click', () => requestExportWithDonation('3mf'));
 
     const saveBtn = document.getElementById('saveFileBtn');
     if (saveBtn) saveBtn.addEventListener('click', saveProject);
@@ -1640,6 +1716,7 @@ function finishCurrentPath() {
     currentPath = [];
     redraw2DCanvas();
     updateSketchStatus();
+    updateMobileWorkflowUI();
 }
 
 // --- 7. GEOMETRIE-HILFSFUNKTIONEN (mm-Ebene) ---
@@ -3466,8 +3543,9 @@ function generate3DModel() {
     if (viewportMode !== '2d') {
         fitCameraToScene(viewportMode === 'layout3d' ? 'layout' : 'track');
     }
-    if (window.matchMedia && window.matchMedia('(max-width: 900px)').matches) {
-        setMobileSection('preview');
+    updateMobileWorkflowUI();
+    if (isMobileLayout()) {
+        setMobileWorkflowStep('preview');
     }
 }
 
@@ -3496,6 +3574,58 @@ function updatePartsList() {
     const plateCount = Math.max(...generatedSegments.map(s => (s.plateIndex ?? 0))) + 1;
     html += `<div style="margin-top:5px;color:#999;">Gesamt: ${generatedSegments.length} Teile auf ${plateCount} Druckplatte${plateCount > 1 ? 'n' : ''}</div>`;
     container.innerHTML = html;
+}
+
+// --- MODALS / SPENDEN-HINWEIS ---
+function setupAppModals() {
+    const welcome = document.getElementById('welcomeModal');
+    const welcomeStart = document.getElementById('welcomeStartBtn');
+    if (welcome) {
+        welcome.hidden = false;
+        requestAnimationFrame(() => welcome.classList.add('is-open'));
+    }
+    if (welcomeStart) welcomeStart.addEventListener('click', () => closeAppModal(welcome));
+
+    const paypalBtn = document.getElementById('donationPaypalBtn');
+    const skipBtn = document.getElementById('donationSkipBtn');
+    if (paypalBtn) paypalBtn.addEventListener('click', () => finishDonationPrompt(true));
+    if (skipBtn) skipBtn.addEventListener('click', () => finishDonationPrompt(false));
+}
+
+function closeAppModal(modal) {
+    if (!modal) return;
+    modal.classList.remove('is-open');
+    setTimeout(() => { modal.hidden = true; }, 160);
+}
+
+function requestExportWithDonation(type) {
+    const action = type === '3mf' ? exportColored3MF : exportAllSTL;
+    if (donationPromptShownThisSession) {
+        action();
+        return;
+    }
+    pendingExportAction = action;
+    const modal = document.getElementById('donationModal');
+    if (!modal) {
+        donationPromptShownThisSession = true;
+        action();
+        return;
+    }
+    modal.hidden = false;
+    requestAnimationFrame(() => modal.classList.add('is-open'));
+}
+
+function finishDonationPrompt(openPaypal) {
+    donationPromptShownThisSession = true;
+    const modal = document.getElementById('donationModal');
+    closeAppModal(modal);
+    if (openPaypal) {
+        const paypalUrl = 'https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=andreas.stuermer90%40gmail.com&currency_code=EUR&item_name=RC%20Track%20Builder';
+        window.open(paypalUrl, '_blank', 'noopener,noreferrer');
+    }
+    const action = pendingExportAction;
+    pendingExportAction = null;
+    if (action) setTimeout(() => action(), openPaypal ? 220 : 40);
 }
 
 // --- 11. STL-EXPORT (ZIP) ---

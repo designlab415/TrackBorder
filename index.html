@@ -18,7 +18,6 @@
         <div id="mobileTopBar">
             <div class="mobile-title">
                 <strong>RC Track Builder</strong>
-                <span>1:50</span>
             </div>
             <button id="mobileSaveBtn" class="mobile-save-btn" type="button" aria-label="Projekt speichern">💾</button>
         </div>
@@ -28,7 +27,7 @@
             <div id="sidebarHeader">
                 <div class="sidebar-title-block">
                     <h2>RC Track Builder</h2>
-                    <span class="scale-badge">Konfigurator · Maßstab 1:50</span>
+                    <span class="scale-badge">Konfigurator</span>
                 </div>
                 <div class="sidebar-header-actions">
                     <button id="saveQuickBtn" class="btn-secondary btn-compact" type="button">💾 Speichern</button>
@@ -46,8 +45,8 @@
 
             <!-- TAB: Modellierer -->
             <div class="tab-panel active" data-panel="sketch">
-                <div class="card">
-                    <h3><span class="card-icon">📍</span>Strecken-Vorlage</h3>
+                <div class="card track-card">
+                    <h3><span class="card-icon">📍</span>Strecke auswählen</h3>
                     <label>Hersteller:</label>
                     <select id="manufacturerSelect">
                         <option value="">-- Hersteller auswählen --</option>
@@ -66,10 +65,10 @@
                             <input type="number" id="trackWidth" value="150" step="0.1" min="10">
                         </div>
                     </div>
-                    <div class="hint">Dateinamen im Ordner <strong>assets/tracks</strong>: <code>Hersteller_Strecke_Länge-Breite.webp</code>, Maße in cm. Die Dateinamen werden oben in <code>TRACK_FILES</code> in app.js eingetragen.</div>
+                    <div class="hint">Dateinamen im Ordner <strong>assets/tracks</strong>: <code>Hersteller_Strecke_Länge-Breite.webp</code>, Maße in cm.</div>
                 </div>
 
-                <div class="card">
+                <div class="card sketch-help-card">
                     <h3><span class="card-icon">✏️</span>Skizzieren</h3>
 
                     <div class="hint-box">
@@ -81,21 +80,14 @@
 
                     <div class="hint" id="sketchStatus">Keine Skizze vorhanden.</div>
 
-                    <button id="insertPointModeBtn" class="btn-secondary">📍 Punkt-Einfügen-Modus: Aus</button>
-
-                    <div class="button-row">
-                        <button id="finishPathBtn" class="btn-secondary">Strang abschließen</button>
-                        <button id="deleteSelectedPointBtn" class="btn-secondary" disabled>Punkt löschen</button>
-                    </div>
-                    <button id="toggleOuterSideBtn" class="btn-secondary">Außenseite umkehren ⇄</button>
                     <button id="clearPoints" class="btn-danger-outline">Skizze Löschen</button>
                 </div>
             </div>
 
             <!-- TAB: Bauteil -->
             <div class="tab-panel" data-panel="part">
-                <div class="card">
-                    <h3><span class="card-icon">🧱</span>3D-Modell-Generator</h3>
+                <div class="card model-card">
+                    <h3><span class="card-icon">🧱</span>Bauteil wählen</h3>
                     <select id="elementType">
                         <option value="bande">Bande (Beton-Leitwand-Optik)</option>
                         <option value="curb">Curb (Rampe zur Fahrbahn)</option>
@@ -126,14 +118,14 @@
                             <input type="number" id="curbPatternLength" value="20" step="0.5" min="5" max="50">
                         </div>
                     </div>
-                    <div class="hint" id="curbGeometryHint">Der weiße Grundkörper ist fest 0,4 mm hoch. Die Curb-Neigung ergibt sich automatisch aus Curb-Höhe und Curb-Tiefe. Die Farbblock-Länge steuert zugleich die Struktur: die Längsstruktur läuft synchron zum Farbraster und ist jetzt halb so dicht wie zuvor: über zwei Farbblöcke entstehen 5 Strukturfelder. Bei 20 mm Farbblock-Länge entspricht das einem Strukturraster von 8 mm im Modell. Die Quer-Stufen, die den Curb-Winkel bilden, bleiben unverändert.</div>
+                    <div class="hint" id="curbGeometryHint">Der weiße Grundkörper ist fest 0,4 mm hoch. Die Curb-Neigung ergibt sich automatisch aus Curb-Höhe und Curb-Tiefe.</div>
                     <button id="generate3d" class="btn-primary">🧊 3D Modell Generieren</button>
                 </div>
             </div>
 
             <!-- TAB: Generieren & Export -->
             <div class="tab-panel" data-panel="export">
-                <div class="card">
+                <div class="card export-card export-bed-card">
                     <h3><span class="card-icon">🖨️</span>Druckbett-Größe</h3>
                     <div class="input-row">
                         <div>
@@ -149,17 +141,17 @@
                         <strong>Pflichtangabe</strong> für das Zuschneiden und Platzieren der Segmente auf dem Druckbett. Passen nicht alle Teile auf eine Platte, werden automatisch weitere Druckplatten angelegt.
                     </div>
                 </div>
-                <div class="card">
+                <div class="card export-card">
                     <h3><span class="card-icon">📋</span>Stückliste</h3>
                     <div id="partList">Keine Segmente generiert</div>
                 </div>
-                <div class="card">
+                <div class="card export-card export-download-card">
                     <h3><span class="card-icon">📦</span>Export</h3>
                     <button id="exportStl" class="btn-primary" disabled>⬇️ STL Dateiensatz (.zip)</button>
                     <button id="export3mf" class="btn-secondary" disabled>⬇️ 3MF (mit Farbe)</button>
                     <div class="hint">STL enthält keine Farbe (Format-Grenze). 3MF ist ein modernes ZIP/XML-Format mit Farbe pro Bauteil - unterstützt u.a. von BambuStudio, OrcaSlicer, PrusaSlicer &amp; Cura. Bei mehreren Druckplatten enthält der Download je Platte eine eigene Datei.</div>
                 </div>
-                <div class="card">
+                <div class="card export-card">
                     <h3><span class="card-icon">📂</span>Projekt laden</h3>
                     <button id="loadFileBtn" class="btn-secondary">Projekt laden (.json)</button>
                     <input type="file" id="projectFileInput" accept=".json" style="display: none;">
@@ -172,11 +164,17 @@
         <div id="viewports">
             <div class="viewport-container mode-2d" id="viewport2D">
                 <div class="viewport-topbar">
-                    <div class="view-heading">Ansicht</div>
                     <div class="view-switch" id="viewSwitch">
                         <button id="viewMode2DBtn" class="view-switch-btn active" type="button">2D Skizze</button>
                         <button id="viewMode3DBtn" class="view-switch-btn" type="button">3D Strecke</button>
                         <button id="viewModeLayoutBtn" class="view-switch-btn" type="button">Druckbett</button>
+                    </div>
+                </div>
+                <div id="mobileSketchCoach" class="mobile-sketch-coach" hidden>
+                    <div class="mobile-sketch-coach-card">
+                        <strong>Jetzt den Verlauf einzeichnen</strong>
+                        <p>Tippe entlang der gewünschten Curb- oder Bandenlinie. Das grüne Häkchen beendet einen Strang. Der orange Pfeil legt die Außenseite fest.</p>
+                        <button id="mobileSketchCoachOk" class="btn-primary" type="button">Alles klar – zeichnen</button>
                     </div>
                 </div>
                 <canvas id="sketchCanvas"></canvas>
@@ -193,7 +191,6 @@
                 </div>
                 <div id="viewportBottomBar">
                     <button id="measureModeBtn" class="btn-secondary btn-compact" type="button">📏 Messen: Aus</button>
-                    <div class="hint" id="measureStatus">Messfunktion aus. Aktivieren und zwei Punkte auf der Strecke wählen.</div>
                 </div>
             </div>
         </div>
@@ -201,12 +198,34 @@
 
     <!-- Mobile Bottom Nav (nur < 900px sichtbar) -->
     <div id="mobileSidebarBackdrop" aria-hidden="true"></div>
-    <div id="mobileBottomNav" aria-label="Mobile Navigation">
-        <button class="mnav-btn active" data-mobile-section="draw">✏️<span>Zeichnen</span></button>
-        <button class="mnav-btn" data-mobile-section="model">🧊<span>Modell</span></button>
-        <button class="mnav-btn" data-mobile-section="preview">👁️<span>3D</span></button>
-        <button class="mnav-btn" data-mobile-section="export">📦<span>Export</span></button>
-        <button class="mnav-btn mnav-menu-btn" id="mobileSidebarToggle" type="button" aria-expanded="false">☰<span>Menü</span></button>
+    <div id="mobileFlowBar" aria-label="Schrittsteuerung">
+        <button id="mobileFlowBack" class="mobile-flow-back" type="button">‹ Zurück</button>
+        <div id="mobileFlowStep" class="mobile-flow-step">1 / 5 · Strecke</div>
+        <button id="mobileFlowNext" class="mobile-flow-next" type="button">Weiter</button>
+    </div>
+    <button class="mobile-menu-fab" id="mobileSidebarToggle" type="button" aria-expanded="false" aria-label="Menü öffnen">☰</button>
+
+    <!-- Start-Hinweis -->
+    <div id="welcomeModal" class="app-modal" role="dialog" aria-modal="true" aria-labelledby="welcomeTitle" hidden>
+        <div class="app-modal-card welcome-modal-card">
+            <div class="app-modal-icon">🏁</div>
+            <h2 id="welcomeTitle">RC Track Builder</h2>
+            <p>Zeichne Curbs oder Banden direkt auf einer Streckenvorlage, prüfe das Ergebnis in 3D und exportiere die fertigen Teile als STL oder farbiges 3MF.</p>
+            <button id="welcomeStartBtn" class="btn-primary" type="button">Los geht’s</button>
+        </div>
+    </div>
+
+    <!-- Spenden-Hinweis beim ersten Export -->
+    <div id="donationModal" class="app-modal" role="dialog" aria-modal="true" aria-labelledby="donationTitle" hidden>
+        <div class="app-modal-card donation-modal-card">
+            <div class="app-modal-icon">☕</div>
+            <h2 id="donationTitle">Gefällt dir der Track Builder?</h2>
+            <p>Wenn dir das Tool Arbeit spart, freue ich mich sehr über eine kleine Spende. Sie hilft dabei, den Track Builder weiterzuentwickeln und neue Funktionen einzubauen.</p>
+            <div class="donation-actions">
+                <button id="donationPaypalBtn" class="btn-paypal" type="button">💙 Mit PayPal unterstützen</button>
+                <button id="donationSkipBtn" class="btn-secondary donation-skip" type="button">😎 Andere sollen sich die Arbeit machen – mir doch egal</button>
+            </div>
+        </div>
     </div>
 
     <script src="app.js"></script>

@@ -17,11 +17,86 @@
 // Hersteller_Streckenname_Laenge-Breite.webp   (Laenge/Breite in cm)
 // Beispiel: "ideallinie_circuit-de-drift-challenges_270-150.webp"
 const TRACK_FILES = [
+    // Klassische Dr!ft-Rennstrecken
     "ideallinie_circuit-de-drift-challenges_270-150.webp",
-    "ideallinie_Tölkeschleife_400-200.webp"
-    // Weitere Dateien einfach als neue Zeile ergänzen, z.B.:
-    // ,"Hersteller_Streckenname_300-180.webp"
+    "ideallinie_tölkeschleife_400-200.webp",
+    "ideallinie_eilenriede-ring_400-240.webp",
+    "ideallinie_the-lost-raceplace_270-150.webp",
+    "ideallinie_motodrom-schmalbergen_400-150.webp",
+    "ideallinie_twin-straights-raceway_400-300.webp",
+    "ideallinie_prinzenpark-motorsportzentrum_600-325.webp",
+
+    // The Scalables – Sophienring Hauptverläufe der 200-cm-Variante
+    "ideallinie_sophienring-3m_300-200.webp",
+    "ideallinie_sophienring-4m_400-200.webp",
+    "ideallinie_sophienring-5m_500-200.webp",
+
+    // Rallycross / Special Tracks
+    "ideallinie_the-grid_275-145.webp",
+    "ideallinie_heidberg-arena_400-240.webp",
+    "ideallinie_nußberg-rx_400-180.webp",
+    "ideallinie_rosenheim-circuit_350-180.webp",
+    "ideallinie_rautheim-rx_300-150.webp",
+    "ideallinie_schwarzer-berg-rx_400-250.webp",
+    "ideallinie_champions-battle_325-205.webp",
+
+    // Micro-Tracks – 1:43 Dr!ft
+    "micro-tracks_circuit-tt-system_270-150.webp",
+    "micro-tracks_spa-wtt_270-150.webp",
+    "micro-tracks_rx-groß-dölln-gt_270-150.webp",
+    "micro-tracks_spa-dtt_270-150.webp",
+    "micro-tracks_wuhlheide-arena_270-150.webp",
+    "micro-tracks_wuhlheide-on-eis_270-150.webp",
+    "micro-tracks_niskanperä-course_270-150.webp",
+    "micro-tracks_niskanperä-course_320-180.webp",
+    "micro-tracks_spa-raceway-wet_270-150.webp",
+    "micro-tracks_spa-raceway-wet_315-175.webp",
+    "micro-tracks_spa-raceway-dry_270-150.webp",
+    "micro-tracks_spa-raceway-dry_315-175.webp",
+    "micro-tracks_hamburg-docks_270-150.webp",
+    "micro-tracks_tokio-dr!ft_270-150.webp",
+    "micro-tracks_rx-groß-dölln_270-150.webp",
+    "micro-tracks_rx-groß-dölln_315-175.webp",
+    "micro-tracks_diepholz-ring_240-210.webp",
+    "micro-tracks_diepholz-ring_300-260.webp",
+    "micro-tracks_groß-dölln-rot_180-100.webp",
+    "micro-tracks_groß-dölln-rot_210-120.webp",
+    "micro-tracks_groß-dölln-blau_180-100.webp",
+    "micro-tracks_groß-dölln-blau_210-120.webp",
+    "micro-tracks_groß-dölln-grün_180-100.webp",
+    "micro-tracks_groß-dölln-grün_210-120.webp",
+    "micro-tracks_barnim-ring_400-240.webp",
+    "micro-tracks_barnim-ring_500-300.webp",
+    "micro-tracks_big-hamburg-docks_400-200.webp",
+    "micro-tracks_big-hamburg-docks_500-250.webp",
+    "micro-tracks_spreewald-park_400-200.webp",
+    "micro-tracks_spreewald-park_500-250.webp"
 ];
+
+// Offizielle/ermittelte Bildquellen. Lokale .webp-Dateien haben IMMER Vorrang.
+// Die URLs werden zusaetzlich vom beiliegenden Download-Skript verwendet.
+// Fuer Strecken, bei denen die Website derzeit keine eindeutige Gesamtansicht als
+// direktes Medien-Asset offenlegt, ist bewusst KEIN unpassendes Detailfoto als
+// Hintergrund hinterlegt. Dort muss die freigegebene Gesamtansicht einmal manuell
+// unter dem oben angegebenen Dateinamen nach assets/tracks/ gelegt werden.
+const TRACK_REMOTE_FALLBACKS = {
+    "ideallinie_circuit-de-drift-challenges_270-150.webp": "https://die-ideallinie.de/wp-content/uploads/2020/06/overview_circuit_twin.jpg",
+    "ideallinie_tölkeschleife_400-200.webp": "https://die-ideallinie.de/wp-content/uploads/2022/04/die-ideallinie_Toelkeschleife_Gesamtansicht.jpg",
+    "ideallinie_eilenriede-ring_400-240.webp": "https://die-ideallinie.de/wp-content/uploads/2024/10/00_die-ideallinie_eilenriede_vollformat_reshade.jpg",
+    "ideallinie_the-lost-raceplace_270-150.webp": "https://die-ideallinie.de/wp-content/uploads/2026/06/die-ideallinie_DRFT_Sturmkind_lost-raceplace-Gesamtansicht_Gras.webp",
+    "ideallinie_motodrom-schmalbergen_400-150.webp": "https://die-ideallinie.de/wp-content/uploads/2022/01/02_Motodrom_Schmalbergen.jpg",
+    "ideallinie_twin-straights-raceway_400-300.webp": "https://die-ideallinie.de/wp-content/uploads/2023/05/00_twin-straights-raceway_Luftaufnahme_400-cm-x-300-cm.jpg",
+    "ideallinie_prinzenpark-motorsportzentrum_600-325.webp": "https://die-ideallinie.de/wp-content/uploads/2022/04/die-ideallinie_Prinzenpark_Gesamtansicht.jpg",
+
+    "ideallinie_sophienring-3m_300-200.webp": "https://die-ideallinie.de/wp-content/uploads/2024/11/13_Sophienring_Hauptverlauf_3m-x-2m-600x400.jpg",
+    "ideallinie_sophienring-4m_400-200.webp": "https://die-ideallinie.de/wp-content/uploads/2024/11/12_Sophienring_Hauptverlauf_4m-x-2m-600x400.jpg",
+    "ideallinie_sophienring-5m_500-200.webp": "https://die-ideallinie.de/wp-content/uploads/2024/11/11_Sophienring_Hauptverlauf_5m-x-2m-600x400.jpg",
+
+    "ideallinie_nußberg-rx_400-180.webp": "https://die-ideallinie.de/wp-content/uploads/2023/01/NussbergRX_rallycross_Gesamtansicht.jpg",
+    "ideallinie_rosenheim-circuit_350-180.webp": "https://die-ideallinie.de/wp-content/uploads/2021/09/rosenheim-circuit_die-ideallinie_Gesamtansicht.jpg",
+    "ideallinie_rautheim-rx_300-150.webp": "https://die-ideallinie.de/wp-content/uploads/2023/10/00_rautheim-rx_Videovorschau.jpg",
+    "ideallinie_schwarzer-berg-rx_400-250.webp": "https://die-ideallinie.de/wp-content/uploads/2023/10/00_Schwarzer-Berg-Rallycross_Videovorschau.jpg"
+};
 
 // Druckbett-Limit (mm). EFFECTIVE_MAX ist der Sicherheitsabstand darunter.
 // Druckbett-Maße (mm) - vom Nutzer im Tab "Bauteil" festgelegt (Pflichtangabe vor dem
@@ -45,7 +120,7 @@ const RESAMPLE_STEP_MM = 2; // Auflösung der Mittellinie für glattere Kurven
 // bleiben RC-Fahrzeuge mit niedriger Bodenfreiheit am Curb hängen.
 const ELEMENT_PROFILES = {
     bande: { height: 20, thickness: 13, color: 0xb8b8b8, label: "Bande" },
-    curb:  { height: 2,  thickness: 20, color: 0xf0f0f0, label: "Curb" }
+    curb:  { height: 1.2, thickness: 20, color: 0xf0f0f0, label: "Curb" }
 };
 
 // Bande-Optik: gestufte, sich nach oben verjüngende Form wie eine Beton-Leitwand (NORDBETON-
@@ -142,8 +217,8 @@ let startPanY = 0;
 // nicht in Canvas-Pixeln. So bleiben sie bei Resize/Zoom/Pan korrekt zum Bild ausgerichtet
 // und lassen sich direkt in reale mm umrechnen (fx * Streckenlänge_mm).
 // Jeder fertige Strang ist ein Objekt { points: [...], outerSign: 1|-1 } - outerSign legt fest,
-// auf welcher Seite der Zeichenrichtung die "hohe" Curb-Außenkante liegt (die andere Seite wird
-// zur Fahrbahn hin abgeflacht). Für Bande wird outerSign ignoriert (symmetrisch, egal welche Seite).
+// auf welcher Seite der Zeichenrichtung die Außenseite liegt. Beim Curb ist das die hohe Außenkante;
+// bei der Bande legt outerSign fest, auf welcher Seite der Skizzenlinie das komplette Bauteil steht.
 let paths = [];
 let currentPath = [];
 let pendingOuterSign = 1; // gilt für den nächsten Strang, der abgeschlossen wird
@@ -158,9 +233,18 @@ let suppressNextClick = false; // verhindert einen neuen Punkt direkt nach einem
 let outerSideArrowTips = {};
 let pendingArrowTip = null;
 
+// Messwerkzeug (zwei Punkte direkt auf der Streckenansicht)
+let measureMode = false;
+let measurementStart = null;
+let measurementEnd = null;
+
+// Nach dem Generieren wird die reale Bauteilbreite direkt auf der Streckenansicht eingeblendet.
+let generatedPreview = null;
+
 // 3D-Szene
-let scene, camera, renderer, controls, trackGroup;
+let scene, camera, renderer, controls, trackGroup, trackPreviewGroup, trackSurfaceGroup;
 let generatedSegments = []; // Metadaten + Meshes der zuletzt generierten Teile
+let viewportMode = '2d';
 let trackLengthMM = 2700;
 let trackWidthMM = 1500;
 
@@ -177,6 +261,8 @@ document.addEventListener('DOMContentLoaded', () => {
     updateDeleteButtonState();
     updateOuterSideToggleLabel();
     updateElementDimsVisibility();
+    setViewportMode('2d');
+    updateMeasureStatus();
     tryRestoreAutosave();
 });
 
@@ -199,12 +285,21 @@ function parseTrackFilename(filename) {
     return {
         filename,
         manufacturerKey,
-        manufacturerLabel: prettyTrackLabel(manufacturerKey),
+        manufacturerLabel: prettyManufacturerLabel(manufacturerKey),
         trackKey: trackToken,
         trackLabel: prettyTrackLabel(trackToken),
         lengthCM,
         widthCM
     };
+}
+
+const MANUFACTURER_LABELS = {
+    "ideallinie": "Ideallinie",
+    "micro-tracks": "Micro-Tracks"
+};
+
+function prettyManufacturerLabel(value) {
+    return MANUFACTURER_LABELS[value] || prettyTrackLabel(value);
 }
 
 function prettyTrackLabel(value) {
@@ -293,8 +388,12 @@ function loadPresetImage(filename) {
     if (!filename) {
         currentPresetFilename = '';
         bgImage = null;
+        generatedPreview = null;
+        measurementStart = null;
+        measurementEnd = null;
         resetZoomAndPan();
         redraw2DCanvas();
+        updateTrackPreviewSurface();
         return;
     }
 
@@ -313,14 +412,24 @@ function loadPresetImage(filename) {
         bgImage = img;
         resetZoomAndPan();
         redraw2DCanvas();
+        updateTrackPreviewSurface();
         autosave();
     };
 
+    let triedRemoteFallback = false;
     img.onerror = () => {
+        const fallback = TRACK_REMOTE_FALLBACKS[filename];
+        if (!triedRemoteFallback && fallback) {
+            triedRemoteFallback = true;
+            console.warn('Lokales Streckenbild fehlt; lade offizielle Online-Quelle:', fallback);
+            img.src = fallback;
+            return;
+        }
         bgImage = null;
         redraw2DCanvas();
+        updateTrackPreviewSurface();
         console.error('Bild konnte nicht geladen werden: ' + filename);
-        alert('Streckenbild konnte nicht geladen werden: ./assets/tracks/' + filename);
+        alert('Streckenbild konnte weder lokal noch aus der hinterlegten offiziellen Quelle geladen werden: ' + filename);
     };
 
     img.src = './assets/tracks/' + filename;
@@ -383,6 +492,129 @@ function fractionToCanvasPos(frac) {
     };
 }
 
+
+function getLiveTrackDimsMM() {
+    const l = parseFloat((document.getElementById('trackLength')?.value || '').toString().replace(',', '.'));
+    const w = parseFloat((document.getElementById('trackWidth')?.value || '').toString().replace(',', '.'));
+    return { lengthMM: Number.isFinite(l) && l > 0 ? l * 10 : trackLengthMM,
+             widthMM: Number.isFinite(w) && w > 0 ? w * 10 : trackWidthMM };
+}
+
+function drawMeasurementOverlay() {
+    if (!measurementStart || !bgImage) return;
+    const a = fractionToCanvasPos(measurementStart);
+    const b = measurementEnd ? fractionToCanvasPos(measurementEnd) : null;
+    ctx2D.save();
+    ctx2D.lineWidth = 2.5 / zoomLevel;
+    ctx2D.strokeStyle = '#ffe44d';
+    ctx2D.fillStyle = '#ffe44d';
+    ctx2D.beginPath();
+    ctx2D.arc(a.x, a.y, 5 / zoomLevel, 0, Math.PI * 2);
+    ctx2D.fill();
+    if (b) {
+        ctx2D.beginPath();
+        ctx2D.moveTo(a.x, a.y);
+        ctx2D.lineTo(b.x, b.y);
+        ctx2D.stroke();
+        ctx2D.beginPath();
+        ctx2D.arc(b.x, b.y, 5 / zoomLevel, 0, Math.PI * 2);
+        ctx2D.fill();
+
+        const dims = getLiveTrackDimsMM();
+        const dx = (measurementEnd.fx - measurementStart.fx) * dims.lengthMM;
+        const dy = (measurementEnd.fy - measurementStart.fy) * dims.widthMM;
+        const mm = Math.hypot(dx, dy);
+        const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+        const label = `${mm.toFixed(1)} mm`;
+        ctx2D.font = `bold ${13 / zoomLevel}px sans-serif`;
+        const tw = ctx2D.measureText(label).width;
+        const px = 6 / zoomLevel, py = 4 / zoomLevel;
+        ctx2D.fillStyle = 'rgba(0,0,0,0.78)';
+        ctx2D.fillRect(mx - tw/2 - px, my - (13/zoomLevel)/2 - py, tw + 2*px, 13/zoomLevel + 2*py);
+        ctx2D.fillStyle = '#ffe44d';
+        ctx2D.textAlign = 'center';
+        ctx2D.textBaseline = 'middle';
+        ctx2D.fillText(label, mx, my);
+    }
+    ctx2D.restore();
+}
+
+function buildPreviewPolygon(pointsFrac, outerSign, thicknessMM) {
+    if (!pointsFrac || pointsFrac.length < 2) return [];
+    const dims = getLiveTrackDimsMM();
+    if (!(dims.lengthMM > 0) || !(dims.widthMM > 0)) return [];
+
+    const mmPoints = pointsFrac.map(p => ({ x: p.fx * dims.lengthMM, y: p.fy * dims.widthMM }));
+    const smoothed = smoothCenterline(mmPoints);
+    const dense = resamplePolyline(smoothed, RESAMPLE_STEP_MM);
+    if (dense.length < 2) return [];
+
+    const side = outerSign >= 0 ? 1 : -1;
+    const offsetA = Math.min(0, side * thicknessMM);
+    const offsetB = Math.max(0, side * thicknessMM);
+
+    let outline = [];
+    try {
+        outline = buildSegmentOutline(dense, offsetA, offsetB, false, false, true, true, null);
+    } catch (err) {
+        console.warn('Vorschau-Polygon konnte nicht präzise berechnet werden', err);
+        outline = [];
+    }
+    return outline.map(p => fractionToCanvasPos({ fx: p.x / dims.lengthMM, fy: p.y / dims.widthMM }));
+}
+
+function buildGeneratedPreviewData(type, thicknessMM) {
+    return {
+        type,
+        thicknessMM,
+        paths: paths.map(p => ({ points: p.points.map(q => ({ fx: q.fx, fy: q.fy })), outerSign: p.outerSign >= 0 ? 1 : -1 })),
+        polygons: paths.map(p => buildPreviewPolygon(p.points, p.outerSign >= 0 ? 1 : -1, thicknessMM))
+    };
+}
+
+function drawGeneratedPreviewOverlay() {
+    if (!generatedPreview || !bgImage) return;
+    ctx2D.save();
+    const isCurb = generatedPreview.type === 'curb';
+    ctx2D.fillStyle = isCurb ? 'rgba(245, 245, 245, 0.52)' : 'rgba(110, 120, 135, 0.58)';
+    ctx2D.strokeStyle = isCurb ? 'rgba(255, 80, 60, 0.95)' : 'rgba(225, 235, 245, 0.95)';
+    ctx2D.lineWidth = 1.5 / zoomLevel;
+
+    const polys = Array.isArray(generatedPreview.polygons) && generatedPreview.polygons.length
+        ? generatedPreview.polygons
+        : generatedPreview.paths.map(path => buildPreviewPolygon(path.points, path.outerSign, generatedPreview.thicknessMM));
+
+    polys.forEach(poly => {
+        if (!poly || poly.length < 3) return;
+        ctx2D.beginPath();
+        ctx2D.moveTo(poly[0].x, poly[0].y);
+        for (let i = 1; i < poly.length; i++) ctx2D.lineTo(poly[i].x, poly[i].y);
+        ctx2D.closePath();
+        ctx2D.fill();
+        ctx2D.stroke();
+    });
+    ctx2D.restore();
+}
+
+function updateMeasureStatus() {
+    const btn = document.getElementById('measureModeBtn');
+    const status = document.getElementById('measureStatus');
+    if (btn) {
+        btn.textContent = `📏 Messen: ${measureMode ? 'An' : 'Aus'}`;
+        btn.classList.toggle('measure-active', measureMode);
+    }
+    if (!status) return;
+    if (!measureMode) status.textContent = 'Messfunktion aus. Aktivieren und zwei Punkte auf der Strecke wählen.';
+    else if (!measurementStart) status.textContent = 'Ersten Messpunkt wählen.';
+    else if (!measurementEnd) status.textContent = 'Zweiten Messpunkt wählen.';
+    else {
+        const dims = getLiveTrackDimsMM();
+        const dx=(measurementEnd.fx-measurementStart.fx)*dims.lengthMM;
+        const dy=(measurementEnd.fy-measurementStart.fy)*dims.widthMM;
+        status.textContent = `Gemessen: ${Math.hypot(dx,dy).toFixed(1)} mm. Für eine neue Messung wieder den ersten Punkt wählen.`;
+    }
+}
+
 function redraw2DCanvas() {
     if (!ctx2D || !canvas2D) return;
 
@@ -415,8 +647,10 @@ function redraw2DCanvas() {
         ctx2D.lineWidth = 1 / zoomLevel;
         ctx2D.strokeRect(dp.shiftX, dp.shiftY, bgImage.width * dp.ratio, bgImage.height * dp.ratio);
 
+        drawGeneratedPreviewOverlay();
         paths.forEach(path => drawPath(path.points, false));
         if (currentPath.length > 0) drawPath(currentPath, true);
+        drawMeasurementOverlay();
 
         outerSideArrowTips = {};
         pendingArrowTip = null;
@@ -580,7 +814,7 @@ function findArrowNear(pos) {
 
 function updateOuterSideToggleLabel() {
     const btn = document.getElementById('toggleOuterSideBtn');
-    if (btn) btn.textContent = `Curb-Außenseite umkehren ⇄ (aktuell: ${pendingOuterSign >= 0 ? 'A' : 'B'})`;
+    if (btn) btn.textContent = `Außenseite umkehren ⇄ (aktuell: ${pendingOuterSign >= 0 ? 'A' : 'B'})`;
 }
 
 function updateElementDimsVisibility() {
@@ -749,44 +983,159 @@ function getTransformedMousePos(e) {
 
 // --- 6. EVENT LISTENERS (ZOOM, PAN, SKIZZIEREN, 3D, EXPORT, PROJEKT) ---
 // --- TABS (Sidebar) & MOBILE BOTTOM NAV ---
+const WORKFLOW_VIEW_BY_TAB = {
+    sketch: '2d',
+    part: 'track3d',
+    export: 'layout3d'
+};
+const WORKFLOW_TAB_BY_VIEW = {
+    '2d': 'sketch',
+    track3d: 'part',
+    layout3d: 'export'
+};
+const WORKFLOW_HINTS = {
+    sketch: '1 · Strecke wählen und Verlauf zeichnen',
+    part: '2 · Maße festlegen, generieren und direkt auf der Strecke prüfen',
+    export: '3 · Druckbett kontrollieren und Dateien exportieren'
+};
+
+function activateWorkflowTab(tabName, syncViewport = true) {
+    const tab = WORKFLOW_VIEW_BY_TAB[tabName] ? tabName : 'sketch';
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.dataset.panel === tab));
+    const hint = document.getElementById('workflowHint');
+    if (hint) hint.textContent = WORKFLOW_HINTS[tab];
+    if (syncViewport) setViewportMode(WORKFLOW_VIEW_BY_TAB[tab], false);
+}
+
 function setupTabs() {
     document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-            btn.classList.add('active');
-            const panel = document.querySelector(`.tab-panel[data-panel="${btn.dataset.tab}"]`);
-            if (panel) panel.classList.add('active');
-        });
+        btn.addEventListener('click', () => activateWorkflowTab(btn.dataset.tab, true));
     });
 }
 
-function setupMobileNav() {
-    document.querySelectorAll('.mnav-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            document.querySelectorAll('.mnav-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            document.body.classList.remove('mview-sketch', 'mview-3d', 'mview-settings');
-            document.body.classList.add('mview-' + btn.dataset.view);
+function setMobileSection(section) {
+    const allowed = ['draw', 'model', 'preview', 'export'];
+    const next = allowed.includes(section) ? section : 'draw';
+    document.body.classList.remove('mview-draw', 'mview-model', 'mview-preview', 'mview-export');
+    document.body.classList.add('mview-' + next);
+    document.querySelectorAll('.mnav-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.mobileSection === next);
+    });
 
-            // Canvas/Renderer waren ggf. unsichtbar (display:none) und kennen daher ihre
-            // korrekte Größe nicht mehr - nach dem Sichtbarwerden neu berechnen.
-            if (btn.dataset.view === '3d') {
-                setTimeout(() => {
-                    const container = document.getElementById('threeContainer');
-                    if (container && renderer && camera) {
-                        const w = container.clientWidth, h = container.clientHeight || 1;
-                        camera.aspect = w / h;
-                        camera.updateProjectionMatrix();
-                        renderer.setSize(w, h);
-                    }
-                }, 50);
-            } else if (btn.dataset.view === 'sketch') {
-                setTimeout(() => { resizeCanvasToDisplaySize(); redraw2DCanvas(); }, 50);
+    if (next === 'draw') {
+        activateWorkflowTab('sketch', false);
+        setViewportMode('2d', false);
+        setTimeout(() => { resizeCanvasToDisplaySize(); redraw2DCanvas(); }, 30);
+    } else if (next === 'model') {
+        activateWorkflowTab('part', false);
+    } else if (next === 'preview') {
+        activateWorkflowTab('part', false);
+        setViewportMode('track3d', false);
+        setTimeout(() => { resizeThreeRendererToContainer(); fitCameraToScene('track'); }, 30);
+    } else if (next === 'export') {
+        activateWorkflowTab('export', false);
+    }
+}
+
+function setMobileSidebarOpen(open) {
+    const isOpen = !!open;
+    document.body.classList.toggle('mobile-sidebar-open', isOpen);
+    const toggle = document.getElementById('mobileSidebarToggle');
+    if (toggle) {
+        toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        toggle.classList.toggle('active-menu', isOpen);
+    }
+    const backdrop = document.getElementById('mobileSidebarBackdrop');
+    if (backdrop) backdrop.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+}
+
+function toggleMobileSidebar() {
+    setMobileSidebarOpen(!document.body.classList.contains('mobile-sidebar-open'));
+}
+
+function setupMobileNav() {
+    document.querySelectorAll('.mnav-btn[data-mobile-section]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            setMobileSidebarOpen(false);
+            setMobileSection(btn.dataset.mobileSection);
+        });
+    });
+
+    const sidebarToggle = document.getElementById('mobileSidebarToggle');
+    if (sidebarToggle) sidebarToggle.addEventListener('click', toggleMobileSidebar);
+    const sidebarClose = document.getElementById('mobileSidebarClose');
+    if (sidebarClose) sidebarClose.addEventListener('click', () => setMobileSidebarOpen(false));
+    const backdrop = document.getElementById('mobileSidebarBackdrop');
+    if (backdrop) backdrop.addEventListener('click', () => setMobileSidebarOpen(false));
+
+    // Im mobilen Drawer darf ein Klick auf einen Workflow-Reiter direkt die passende
+    // Ansicht aktivieren und schließt anschließend den Drawer wieder.
+    document.querySelectorAll('#tabBar .tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            if (window.matchMedia('(max-width: 900px)').matches) {
+                setMobileSidebarOpen(false);
+                const mobileSection = btn.dataset.tab === 'sketch' ? 'draw' : btn.dataset.tab === 'part' ? 'model' : 'export';
+                setMobileSection(mobileSection);
             }
         });
     });
-    document.body.classList.add('mview-sketch');
+
+    const mobileSaveBtn = document.getElementById('mobileSaveBtn');
+    if (mobileSaveBtn) mobileSaveBtn.addEventListener('click', saveProject);
+    setMobileSidebarOpen(false);
+    setMobileSection('draw');
+}
+
+function resizeThreeRendererToContainer() {
+    const container = document.getElementById('threeContainer');
+    if (!container || !renderer || !camera) return;
+    const w = container.clientWidth || 1;
+    const h = container.clientHeight || 1;
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    renderer.setSize(w, h);
+}
+
+function setViewportMode(mode, syncTab = true) {
+    viewportMode = ['track3d', 'layout3d'].includes(mode) ? mode : '2d';
+    const is3D = viewportMode !== '2d';
+    const isTrack3D = viewportMode === 'track3d';
+    const isLayout3D = viewportMode === 'layout3d';
+    const viewport = document.getElementById('viewport2D');
+    const btn2d = document.getElementById('viewMode2DBtn');
+    const btn3d = document.getElementById('viewMode3DBtn');
+    const btnLayout = document.getElementById('viewModeLayoutBtn');
+
+    if (viewport) {
+        viewport.classList.toggle('mode-3d', is3D);
+        viewport.classList.toggle('mode-2d', !is3D);
+        viewport.classList.toggle('mode-track3d', isTrack3D);
+        viewport.classList.toggle('mode-layout3d', isLayout3D);
+    }
+    if (btn2d) btn2d.classList.toggle('active', viewportMode === '2d');
+    if (btn3d) btn3d.classList.toggle('active', isTrack3D);
+    if (btnLayout) btnLayout.classList.toggle('active', isLayout3D);
+
+    if (syncTab) activateWorkflowTab(WORKFLOW_TAB_BY_VIEW[viewportMode], false);
+
+    if (trackSurfaceGroup) trackSurfaceGroup.visible = isTrack3D;
+    if (trackPreviewGroup) trackPreviewGroup.visible = isTrack3D;
+    if (trackGroup) trackGroup.visible = isLayout3D;
+    if (bedGroup) bedGroup.visible = isLayout3D;
+
+    if (is3D) {
+        if (isTrack3D) updateTrackPreviewSurface();
+        setTimeout(() => {
+            resizeThreeRendererToContainer();
+            fitCameraToScene(isLayout3D ? 'layout' : 'track');
+        }, 30);
+    } else {
+        setTimeout(() => {
+            resizeCanvasToDisplaySize();
+            redraw2DCanvas();
+        }, 30);
+    }
 }
 
 // Zoomt zentriert auf die Canvas-Mitte (für die +/- Buttons, v.a. auf Touch-Geräten ohne Mausrad).
@@ -829,6 +1178,12 @@ function setupEventListeners() {
         clearBtn.addEventListener('click', () => {
             paths = [];
             currentPath = [];
+            generatedPreview = null;
+            clearGeneratedMeshes();
+            generatedSegments = [];
+            updatePartsList();
+            measurementStart = null;
+            measurementEnd = null;
             selectedPointRef = null;
             draggingPointRef = null;
             redraw2DCanvas();
@@ -885,6 +1240,33 @@ function setupEventListeners() {
         });
     }
 
+    const measureBtn = document.getElementById('measureModeBtn');
+    if (measureBtn) {
+        measureBtn.addEventListener('click', () => {
+            measureMode = !measureMode;
+            if (!measureMode) { measurementStart = null; measurementEnd = null; }
+            updateMeasureStatus();
+            redraw2DCanvas();
+        });
+    }
+
+    const viewMode2DBtn = document.getElementById('viewMode2DBtn');
+    if (viewMode2DBtn) viewMode2DBtn.addEventListener('click', () => setViewportMode('2d'));
+    const viewMode3DBtn = document.getElementById('viewMode3DBtn');
+    if (viewMode3DBtn) viewMode3DBtn.addEventListener('click', () => setViewportMode('track3d'));
+    const viewModeLayoutBtn = document.getElementById('viewModeLayoutBtn');
+    if (viewModeLayoutBtn) viewModeLayoutBtn.addEventListener('click', () => setViewportMode('layout3d'));
+
+    ['trackLength', 'trackWidth'].forEach(id => {
+        const input = document.getElementById(id);
+        if (!input) return;
+        input.addEventListener('input', () => {
+            redraw2DCanvas();
+            updateTrackPreviewSurface();
+            if (viewportMode !== '2d') fitCameraToScene(viewportMode === 'layout3d' ? 'layout' : 'track');
+        });
+    });
+
     const generateBtn = document.getElementById('generate3d');
     if (generateBtn) generateBtn.addEventListener('click', generate3DModel);
 
@@ -896,6 +1278,8 @@ function setupEventListeners() {
 
     const saveBtn = document.getElementById('saveFileBtn');
     if (saveBtn) saveBtn.addEventListener('click', saveProject);
+    const saveQuickBtn = document.getElementById('saveQuickBtn');
+    if (saveQuickBtn) saveQuickBtn.addEventListener('click', saveProject);
 
     const loadBtn = document.getElementById('loadFileBtn');
     const fileInput = document.getElementById('projectFileInput');
@@ -960,6 +1344,7 @@ function setupEventListeners() {
         }
 
         if (e.button === 0 && bgImage) {
+            if (measureMode) return;
             const pos = getTransformedMousePos(e);
 
             const arrowHit = findArrowNear(pos);
@@ -987,11 +1372,24 @@ function setupEventListeners() {
     canvas2D.addEventListener('click', (e) => {
         if (suppressNextClick) { suppressNextClick = false; return; }
         if (e.shiftKey) return; // war ein Verschieben, kein Punkt
-        if (selectedPointRef) return; // Klick hat einen bestehenden Punkt getroffen/verschoben - keinen neuen setzen
         if (!bgImage) {
             alert('Bitte zuerst eine Strecken-Vorlage auswählen.');
             return;
         }
+        if (measureMode) {
+            const pos = getTransformedMousePos(e);
+            const frac = canvasPosToFraction(pos);
+            if (!measurementStart || measurementEnd) {
+                measurementStart = frac;
+                measurementEnd = null;
+            } else {
+                measurementEnd = frac;
+            }
+            updateMeasureStatus();
+            redraw2DCanvas();
+            return;
+        }
+        if (selectedPointRef) return; // Klick hat einen bestehenden Punkt getroffen/verschoben - keinen neuen setzen
         // e.detail >= 2 bedeutet: dieser Klick ist Teil eines Doppelklicks, der gleich
         // finishCurrentPath() auslöst - hier keinen zusätzlichen Punkt mehr setzen.
         if (e.detail && e.detail >= 2) return;
@@ -1115,6 +1513,7 @@ function setupTouchEvents() {
         touchState.moved = false;
 
         if (!bgImage) { touchState.mode = null; return; }
+        if (measureMode) { touchState.mode = 'measure'; return; }
 
         const pos = { x: (raw.x - panX) / zoomLevel, y: (raw.y - panY) / zoomLevel };
 
@@ -1187,7 +1586,14 @@ function setupTouchEvents() {
     }, { passive: false });
 
     canvas2D.addEventListener('touchend', () => {
-        if (touchState.mode === 'point-drag') {
+        if (touchState.mode === 'measure' && !touchState.moved && bgImage) {
+            const pos = { x: (touchState.startX - panX) / zoomLevel, y: (touchState.startY - panY) / zoomLevel };
+            const frac = canvasPosToFraction(pos);
+            if (!measurementStart || measurementEnd) { measurementStart = frac; measurementEnd = null; }
+            else measurementEnd = frac;
+            updateMeasureStatus();
+            redraw2DCanvas();
+        } else if (touchState.mode === 'point-drag') {
             if (touchState.moved) autosave();
         } else if (touchState.mode === 'arrow-hit' && !touchState.moved) {
             if (touchState.arrowHit === 'pending') {
@@ -1350,7 +1756,7 @@ function smoothCenterline(mmPoints) {
 
 // Teilt eine (verdichtete) Mittellinie in Stücke <= EFFECTIVE_MAX_LENGTH_MM.
 function splitPathIntoSegments(pathPointsFrac) {
-    const mmPoints = pathPointsFrac.map(p => ({ x: p.fx * trackLengthMM, y: p.fy * trackWidthMM }));
+    const mmPoints = pathPointsFrac.map(p => ({ x: p.fx * trackLengthMM, y: (1 - p.fy) * trackWidthMM }));
     const smoothed = smoothCenterline(mmPoints);
     const dense = resamplePolyline(smoothed, RESAMPLE_STEP_MM);
     if (dense.length < 2) return [];
@@ -1694,6 +2100,7 @@ function init3DScene() {
     camera.position.set(-150, -420, 380);
 
     renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(window.devicePixelRatio || 1);
     renderer.setSize(container.clientWidth, container.clientHeight || 500);
     container.appendChild(renderer.domElement);
 
@@ -1706,20 +2113,27 @@ function init3DScene() {
     dirLight.position.set(-200, -300, 500);
     scene.add(dirLight);
 
-    // Druckbett-Platte(n) - werden dynamisch erzeugt (siehe rebuildBedVisuals), da Größe und
-    // Anzahl vom Nutzer festgelegte Werte sind, die sich nach jedem Generieren ändern können.
+    bedGroup = new THREE.Group();
+    bedGroup.visible = false;
+    scene.add(bedGroup);
     rebuildBedVisuals(1);
 
+    trackSurfaceGroup = new THREE.Group();
+    scene.add(trackSurfaceGroup);
+
+    trackPreviewGroup = new THREE.Group();
+    scene.add(trackPreviewGroup);
+
     trackGroup = new THREE.Group();
+    trackGroup.visible = false;
     scene.add(trackGroup);
 
+    updateTrackPreviewSurface();
     animate3D();
 
     window.addEventListener('resize', () => {
-        const w = container.clientWidth, h = container.clientHeight || 1;
-        camera.aspect = w / h;
-        camera.updateProjectionMatrix();
-        renderer.setSize(w, h);
+        resizeThreeRendererToContainer();
+        if (viewportMode !== '2d') fitCameraToScene(viewportMode === 'layout3d' ? 'layout' : 'track');
     });
 }
 
@@ -1759,20 +2173,63 @@ function createPlateVisual(index) {
 // Löscht die alte(n) Druckplatten-Visualisierung(en) und baut plateCount neue, nebeneinander
 // aufgereihte Platten in aktueller Größe/Anzahl auf.
 function rebuildBedVisuals(plateCount) {
-    if (!bedGroup) {
-        bedGroup = new THREE.Group();
-        scene.add(bedGroup);
-    }
-    while (bedGroup.children.length) {
-        const child = bedGroup.children.pop();
-        child.traverse(n => {
-            if (n.geometry) n.geometry.dispose();
-            if (n.material) n.material.dispose();
-        });
-    }
+    if (!bedGroup) return;
+    clearGroupContents(bedGroup);
     for (let i = 0; i < plateCount; i++) {
         bedGroup.add(createPlateVisual(i));
     }
+}
+
+function clearGroupContents(group) {
+    if (!group) return;
+    while (group.children.length) {
+        const child = group.children[group.children.length - 1];
+        group.remove(child);
+        child.traverse(node => {
+            if (node.geometry) node.geometry.dispose();
+            if (node.material) {
+                const mats = Array.isArray(node.material) ? node.material : [node.material];
+                mats.forEach(mat => {
+                    if (mat.map) mat.map.dispose?.();
+                    mat.dispose?.();
+                });
+            }
+        });
+    }
+}
+
+function updateTrackPreviewSurface() {
+    if (!trackSurfaceGroup || typeof THREE === 'undefined') return;
+    clearGroupContents(trackSurfaceGroup);
+
+    const dims = getLiveTrackDimsMM();
+    if (!(dims.lengthMM > 0) || !(dims.widthMM > 0)) return;
+
+    const planeGeo = new THREE.PlaneGeometry(dims.lengthMM, dims.widthMM);
+    let planeMat;
+    if (bgImage) {
+        const texture = new THREE.Texture(bgImage);
+        texture.needsUpdate = true;
+        if ('colorSpace' in texture && THREE.SRGBColorSpace) texture.colorSpace = THREE.SRGBColorSpace;
+        texture.wrapS = THREE.ClampToEdgeWrapping;
+        texture.wrapT = THREE.ClampToEdgeWrapping;
+        texture.flipY = true;
+        planeMat = new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide });
+    } else {
+        planeMat = new THREE.MeshStandardMaterial({ color: 0x5a5d65, roughness: 1.0, metalness: 0.0, side: THREE.DoubleSide });
+    }
+
+    const plane = new THREE.Mesh(planeGeo, planeMat);
+    plane.position.set(dims.lengthMM / 2, dims.widthMM / 2, -0.3);
+    trackSurfaceGroup.add(plane);
+
+    const outline = new THREE.LineSegments(
+        new THREE.EdgesGeometry(planeGeo),
+        new THREE.LineBasicMaterial({ color: 0x00d6c8, transparent: true, opacity: 0.55 })
+    );
+    outline.position.copy(plane.position);
+    outline.position.z = 0.2;
+    trackSurfaceGroup.add(outline);
 }
 
 function animate3D() {
@@ -1782,36 +2239,59 @@ function animate3D() {
 }
 
 function clearGeneratedMeshes() {
-    if (!trackGroup) return;
-    while (trackGroup.children.length) {
-        const child = trackGroup.children.pop();
-        child.traverse(node => {
-            if (node.isMesh) {
-                node.geometry.dispose();
-                node.material.dispose();
-            }
-        });
-    }
+    clearGroupContents(trackGroup);
+    clearGroupContents(trackPreviewGroup);
 }
 
-function fitCameraToScene() {
-    if (!trackGroup) return;
-    const box = new THREE.Box3().setFromObject(trackGroup);
-    // Alle Druckplatten immer mit ins Bild nehmen, auch wenn die Segmente kleiner sind
-    if (bedGroup && bedGroup.children.length) {
-        box.union(new THREE.Box3().setFromObject(bedGroup));
-    } else {
-        box.expandByPoint(new THREE.Vector3(0, 0, 0));
-        box.expandByPoint(new THREE.Vector3(bedWidthMM, bedLengthMM, 0));
-    }
-    if (box.isEmpty()) return;
+function fitCameraToScene(target = 'track') {
+    if (!camera || !controls) return;
+    const box = new THREE.Box3();
+    let hasContent = false;
 
+    function unionObject(obj) {
+        if (!obj || !obj.children || obj.children.length === 0) return;
+        const objBox = new THREE.Box3().setFromObject(obj);
+        if (objBox.isEmpty()) return;
+        if (!hasContent) box.copy(objBox);
+        else box.union(objBox);
+        hasContent = true;
+    }
+
+    if (target === 'layout') {
+        unionObject(bedGroup);
+        unionObject(trackGroup);
+    } else {
+        unionObject(trackSurfaceGroup);
+        unionObject(trackPreviewGroup);
+    }
+
+    if (!hasContent) return;
     const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
     const maxDim = Math.max(size.x, size.y, size.z, 150);
-    camera.position.set(center.x - maxDim * 0.15, center.y - maxDim * 0.9, center.z + maxDim * 0.85);
-    controls.target.set(center.x, center.y, 0);
+    if (target === 'track') {
+        camera.position.set(center.x, center.y - maxDim * 0.95, center.z + maxDim * 1.05);
+    } else {
+        camera.position.set(center.x - maxDim * 0.16, center.y - maxDim * 0.92, center.z + maxDim * 0.72);
+    }
+    controls.target.set(center.x, center.y, Math.max(center.z * 0.12, 0));
     controls.update();
+}
+
+function cloneGroupWithResources(source) {
+    const clone = source.clone(true);
+    const sourceMeshes = [];
+    const cloneMeshes = [];
+    source.traverse(node => { if (node.isMesh) sourceMeshes.push(node); });
+    clone.traverse(node => { if (node.isMesh) cloneMeshes.push(node); });
+
+    for (let i = 0; i < Math.min(sourceMeshes.length, cloneMeshes.length); i++) {
+        cloneMeshes[i].geometry = sourceMeshes[i].geometry.clone();
+        cloneMeshes[i].material = Array.isArray(sourceMeshes[i].material)
+            ? sourceMeshes[i].material.map(mat => mat.clone())
+            : sourceMeshes[i].material.clone();
+    }
+    return clone;
 }
 
 // Einfaches "Regal"-Layout: platziert generierte Segmente lückenlos nebeneinander/zeilenweise.
@@ -1864,7 +2344,7 @@ function placeInLayout(mesh, bbox) {
 // Segmentteilungen verändern die Curb-Oberfläche nicht: nach dem Zusammenstecken läuft Profil,
 // Rot/Weiß-Muster und Riefenphase exakt so weiter, als wäre der Curb nie geteilt worden.
 const CURB_STYLE = {
-    stripeLengthMM: 15,          // wird beim Generieren aus dem UI-Wert überschrieben
+    stripeLengthMM: 20,          // wird beim Generieren aus dem UI-Wert überschrieben
     colors: [0xd93a2b, 0xf0f0f0],
     baseHeightMM: 0.4,           // fester weißer Grundkörper
     rampSteps: 6,                // Querstufen bleiben unverändert: sie bilden den Curb-Winkel
@@ -2146,6 +2626,277 @@ function buildCurbProtectedConnectorUpperMeshes(points, thickness, totalHeight, 
 
 // Curb-Rampenstufen. Der Winkel ist jetzt ausschließlich die QUERNEIGUNG des Curbs.
 // Dovetail/Schwalbenschwanz wird hier NICHT verändert.
+
+// V11: Baut EINE Curb-Hoehenlage mit einer geometrisch festen Steckverbindung.
+// Entscheidend: Nut/Zapfen werden einmal aus der GESAMTEN Curb-Tiefe berechnet
+// (sharedTab) und NICHT pro Quer-Stufe neu skaliert. Schneidet die feste Nut eine
+// schmalere obere Lage nur im Inneren, wird dort ein echtes Shape-Hole angelegt.
+// Dadurch durchdringt die weibliche Nut jede vorhandene Hoehenlage vollstaendig,
+// auch wenn die Nut-Oeffnung an der Stirnkante in dieser Lage selbst nicht mehr
+// sichtbar ist. Beim maennlichen Gegenstueck wird ein ggf. vom Stirnrand getrenntes
+// Teil der festen Zapfen-Planform als zusaetzliche Insel derselben Z-Lage erzeugt;
+// es ist ueber die darunterliegenden Lagen mit dem Zapfen verbunden.
+function buildCurbFixedConnectorLayerMeshes(points, offsetA, offsetB, z0, z1,
+                                             hasStartNotch, hasEndTab, sharedTab, material) {
+    const meshes = [];
+    if (!points || points.length < 2 || z1 - z0 < 1e-6) return meshes;
+
+    const n = points.length;
+    const startA = points[0], startB = points[Math.min(1, n - 1)];
+    const endA = points[Math.max(0, n - 2)], endB = points[n - 1];
+
+    function tangentNormal(a, b) {
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const len = Math.hypot(dx, dy) || 1;
+        const t = { x: dx / len, y: dy / len };
+        return { t, n: { x: -t.y, y: t.x } };
+    }
+    const sf = tangentNormal(startA, startB);
+    const ef = tangentNormal(endA, endB);
+
+    const notch = computeNotchGeometry(
+        sharedTab.tabHalf, sharedTab.tabTipHalf, sharedTab.tabLength, DOVETAIL.clearance
+    );
+    const notchLocal = [
+        { l: 0, w: sharedTab.anchorOffset - notch.mouthHalf },
+        { l: notch.depth, w: sharedTab.anchorOffset - notch.bottomHalf },
+        { l: notch.depth, w: sharedTab.anchorOffset + notch.bottomHalf },
+        { l: 0, w: sharedTab.anchorOffset + notch.mouthHalf }
+    ];
+    const tabLocal = [
+        { l: 0, w: sharedTab.anchorOffset - sharedTab.tabHalf },
+        { l: sharedTab.tabLength, w: sharedTab.anchorOffset - sharedTab.tabTipHalf },
+        { l: sharedTab.tabLength, w: sharedTab.anchorOffset + sharedTab.tabTipHalf },
+        { l: 0, w: sharedTab.anchorOffset + sharedTab.tabHalf }
+    ];
+
+    function clippedInfo(poly) {
+        const q = clipConnectorPolygonToWidth(poly, offsetA, offsetB);
+        const clean = [];
+        q.forEach(v => {
+            const prev = clean[clean.length - 1];
+            if (!prev || Math.hypot(v.l - prev.l, v.w - prev.w) > 1e-7) clean.push(v);
+        });
+        if (clean.length > 2 && Math.hypot(clean[0].l - clean[clean.length - 1].l,
+                                          clean[0].w - clean[clean.length - 1].w) < 1e-7) clean.pop();
+        const mouthPts = clean.filter(v => Math.abs(v.l) < 1e-7);
+        return { poly: clean, touchesMouth: mouthPts.length >= 2 };
+    }
+
+    const notchInfo = hasStartNotch ? clippedInfo(notchLocal) : { poly: [], touchesMouth: false };
+    const tabInfo = hasEndTab ? clippedInfo(tabLocal) : { poly: [], touchesMouth: false };
+
+    // Ist der Connector in dieser Lage zur Stirnkante offen, darf buildSegmentOutline
+    // die Aussenkontur direkt entsprechend formen. Liegt ein Teil der Nut/Zunge in
+    // dieser Lage nur im Inneren, bleibt die Aussenkontur gerade und wird unten als
+    // Hole bzw. zusaetzliche Insel behandelt.
+    const openStartNotch = hasStartNotch && notchInfo.touchesMouth;
+    const openEndTab = hasEndTab && tabInfo.touchesMouth;
+
+    const outline = buildSegmentOutline(
+        points, offsetA, offsetB,
+        openStartNotch, openEndTab,
+        false, false, sharedTab
+    );
+    if (outline.length < 3) return meshes;
+
+    const shape = new THREE.Shape(outline.map(v => new THREE.Vector2(v.x, v.y)));
+
+    function localToWorld(poly, origin, frame, inward) {
+        // Start-Nut: +l zeigt IN das Segment. End-Zapfen: +l zeigt AUS dem Segment.
+        const sign = inward ? 1 : 1;
+        return poly.map(v => {
+            const lx = v.l * sign;
+            return new THREE.Vector2(
+                origin.x + frame.n.x * v.w + frame.t.x * lx,
+                origin.y + frame.n.y * v.w + frame.t.y * lx
+            );
+        });
+    }
+
+    // Weibliche Seite: Falls die feste Nut in dieser Hoehenlage nicht mehr zur
+    // Stirnkante offen ist, ist sie geometrisch ein INNERER Durchbruch. Genau dieser
+    // Fall war bisher verloren gegangen und fuehrte zu den sichtbaren Reststegen.
+    if (hasStartNotch && notchInfo.poly.length >= 3 && !notchInfo.touchesMouth) {
+        const holePts = localToWorld(notchInfo.poly, points[0], sf, true);
+        const hole = new THREE.Path();
+        hole.moveTo(holePts[0].x, holePts[0].y);
+        for (let i = 1; i < holePts.length; i++) hole.lineTo(holePts[i].x, holePts[i].y);
+        hole.closePath();
+        shape.holes.push(hole);
+    }
+
+    try {
+        const geo = new THREE.ExtrudeGeometry(shape, { depth: z1 - z0, bevelEnabled: false, steps: 1 });
+        geo.translate(0, 0, z0);
+        meshes.push(new THREE.Mesh(geo, material));
+    } catch (err) {
+        console.error('Curb-Steckverbinder-Hauptlage uebersprungen', err);
+    }
+
+    // V16: Legacy-Zapfen-Inseln bleiben deaktiviert; der maennliche Zapfen wird weiter unten als ein zusammenhaengender Stufenkoerper erzeugt.
+    // Genau diese nur vertikal an darunterliegenden Lagen anliegenden Inseln waren
+    // in WebGL und im Slicer als duenne Dreiecks-/Flaechen-Artefakte sichtbar.
+    // Der maennliche Schwalbenschwanz bleibt in jeder Hoehenlage nur dort aktiv,
+    // wo seine Kontur die Stirnflaeche wirklich erreicht. Dadurch bleibt die
+    // Geometrie manifold/slicer-freundlich, ohne Farbverlauf, Curb-Stufen,
+    // weiblichen Vollschnitt oder die 0,2-mm-Passung anzutasten.
+
+    return meshes;
+}
+
+
+// V16: Baut den maennlichen Curb-Schwalbenschwanz als EINEN zusammenhaengenden
+// gestuften 3D-Koerper. Die Hoehe jedes Querbandes entspricht exakt der Curb-
+// Hoehe an derselben Position. Anders als zuvor entstehen die oberen Teilbereiche
+// nicht als voneinander getrennte Extrusionen; dadurch gibt es keine duennen
+// Dreiecks-/Spitzen-Artefakte zwischen den Stufen.
+function buildCurbSteppedMaleDovetailMesh(points, thickness, totalHeight, baseHeight, outerSign, sharedTab, material) {
+    if (!points || points.length < 2 || !sharedTab || !sharedTab.possible) return null;
+
+    const end = points[points.length - 1];
+    const prev = points[points.length - 2];
+    const dx = end.x - prev.x, dy = end.y - prev.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const tangent = { x: dx / len, y: dy / len };
+    const normal = { x: -tangent.y, y: tangent.x };
+
+    // V17: Nur noch eine MINIMALE Ueberlappung IN das eigene Curb-Segment.
+    // Die vorher groessere Einbindung hat zwar Zapfen und Curb sicher verbunden,
+    // dabei aber die im Screenshot sichtbaren duennen inneren Linien/Flaechen im
+    // Zapfen-Bereich erzeugt. Eine sehr kleine technische Ueberlappung reicht fuer
+    // den Export weiterhin aus, ohne diese sichtbaren Artefakte zu provozieren.
+    const anchorOverlapMM = 0.02;
+    const tabPoly = [
+        { l: -anchorOverlapMM, w: sharedTab.anchorOffset - sharedTab.tabHalf },
+        { l: 0,                w: sharedTab.anchorOffset - sharedTab.tabHalf },
+        { l: sharedTab.tabLength, w: sharedTab.anchorOffset - sharedTab.tabTipHalf },
+        { l: sharedTab.tabLength, w: sharedTab.anchorOffset + sharedTab.tabTipHalf },
+        { l: 0,                w: sharedTab.anchorOffset + sharedTab.tabHalf },
+        { l: -anchorOverlapMM, w: sharedTab.anchorOffset + sharedTab.tabHalf }
+    ];
+
+    const dir = outerSign >= 0 ? 1 : -1;
+    const rampWidth = Math.max(thickness - CURB_STYLE.innerFlatWidthMM, thickness * 0.3);
+    const stepWidth = rampWidth / CURB_STYLE.rampSteps;
+    const rise = Math.max(totalHeight - baseHeight, 0);
+    const stepHeight = rise / CURB_STYLE.rampSteps;
+
+    // Querbaender des Curb-Profils: innen nur Grundhoehe, danach pro Band eine
+    // weitere Hoehenstufe. Die Baender werden in signed-w Koordinaten geclippt.
+    const bands = [];
+    const pushBand = (u0, u1, topZ) => {
+        if (u1 - u0 <= 1e-8) return;
+        const wa = dir * u0, wb = dir * u1;
+        bands.push({ wMin: Math.min(wa, wb), wMax: Math.max(wa, wb), topZ });
+    };
+    pushBand(0, Math.min(CURB_STYLE.innerFlatWidthMM, thickness), baseHeight);
+    for (let step = 1; step <= CURB_STYLE.rampSteps; step++) {
+        const u0 = CURB_STYLE.innerFlatWidthMM + (step - 1) * stepWidth;
+        const u1 = step === CURB_STYLE.rampSteps ? thickness : Math.min(thickness, CURB_STYLE.innerFlatWidthMM + step * stepWidth);
+        pushBand(Math.max(0, u0), Math.max(0, u1), baseHeight + step * stepHeight);
+    }
+
+    function areaLW(poly) {
+        let a = 0;
+        for (let i = 0; i < poly.length; i++) {
+            const p = poly[i], q = poly[(i + 1) % poly.length];
+            a += p.l * q.w - q.l * p.w;
+        }
+        return a * 0.5;
+    }
+    function cleanLW(poly) {
+        const out = [];
+        poly.forEach(v => {
+            const last = out[out.length - 1];
+            if (!last || Math.hypot(v.l-last.l, v.w-last.w) > 1e-7) out.push({l:v.l,w:v.w});
+        });
+        if (out.length > 2 && Math.hypot(out[0].l-out[out.length-1].l, out[0].w-out[out.length-1].w) < 1e-7) out.pop();
+        if (out.length >= 3 && areaLW(out) < 0) out.reverse();
+        return out;
+    }
+
+    const pieces = [];
+    bands.forEach(b => {
+        const q = cleanLW(clipConnectorPolygonToWidth(tabPoly, b.wMin, b.wMax));
+        if (q.length >= 3 && Math.abs(areaLW(q)) > 1e-9) pieces.push({ poly:q, topZ:b.topZ });
+    });
+    if (!pieces.length) return null;
+
+    const positions = [];
+    const indices = [];
+    const vmap = new Map();
+    const edgeMap = new Map();
+    const Q = 100000;
+
+    function world(l, w, z) {
+        return {
+            x: end.x + tangent.x * l + normal.x * w,
+            y: end.y + tangent.y * l + normal.y * w,
+            z
+        };
+    }
+    function keyLW(v) { return `${Math.round(v.l*Q)},${Math.round(v.w*Q)}`; }
+    function vid(v, z) {
+        const k = `${keyLW(v)},${Math.round(z*Q)}`;
+        if (vmap.has(k)) return vmap.get(k);
+        const P = world(v.l, v.w, z);
+        const id = positions.length/3;
+        positions.push(P.x,P.y,P.z);
+        vmap.set(k,id);
+        return id;
+    }
+    function addQuad(a,b,z0,z1,reverse=false) {
+        if (z1-z0 < 1e-8) return;
+        const a0=vid(a,z0), b0=vid(b,z0), a1=vid(a,z1), b1=vid(b,z1);
+        if (!reverse) indices.push(a0,b0,b1, a0,b1,a1);
+        else indices.push(a0,b1,b0, a0,a1,b1);
+    }
+
+    // Oberseiten je Querband und Kantenregister fuer Aussenwaende/Stufenriser.
+    pieces.forEach(pc => {
+        const poly = pc.poly;
+        const t0 = vid(poly[0], pc.topZ);
+        for (let i=1;i<poly.length-1;i++) indices.push(t0, vid(poly[i],pc.topZ), vid(poly[i+1],pc.topZ));
+        for (let i=0;i<poly.length;i++) {
+            const a=poly[i], b=poly[(i+1)%poly.length];
+            const ka=keyLW(a), kb=keyLW(b);
+            const k=ka<kb?`${ka}|${kb}`:`${kb}|${ka}`;
+            if (!edgeMap.has(k)) edgeMap.set(k,[]);
+            edgeMap.get(k).push({a,b,topZ:pc.topZ});
+        }
+    });
+
+    // Eine durchgehende Unterseite fuer den gesamten Zapfen.
+    const bottom = cleanLW(tabPoly);
+    const b0 = vid(bottom[0], 0);
+    for (let i=1;i<bottom.length-1;i++) indices.push(b0, vid(bottom[i+1],0), vid(bottom[i],0));
+
+    edgeMap.forEach(edges => {
+        if (edges.length === 1) {
+            const e=edges[0];
+            addQuad(e.a,e.b,0,e.topZ,false);
+        } else {
+            // Gemeinsame Querband-Grenze: nur die sichtbare Stufenwand zwischen
+            // den beiden unterschiedlichen Oberhoehen erzeugen, keine Doppelwand.
+            const zVals = edges.map(e=>e.topZ).sort((a,b)=>a-b);
+            const zLo=zVals[0], zHi=zVals[zVals.length-1];
+            if (zHi-zLo > 1e-7) {
+                const e=edges[0];
+                addQuad(e.a,e.b,zLo,zHi,false);
+            }
+        }
+    });
+
+    if (!indices.length) return null;
+    let geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions,3));
+    geo.setIndex(indices);
+    geo = geo.toNonIndexed();
+    geo.computeVertexNormals();
+    return new THREE.Mesh(geo, material);
+}
+
 function buildCurbRampMeshes(localChunk, thickness, totalHeight, baseHeight, outerSign,
                              globalStartMM, pathLengthMM, hasStartNotch, hasEndTab,
                              sharedTab) {
@@ -2179,57 +2930,75 @@ function buildCurbRampMeshes(localChunk, thickness, totalHeight, baseHeight, out
 
     const stripePieces = [];
 
-    // Geschuetzte Nut-Zone am Segmentanfang: ein einziges zusammenhaengendes Stueck.
-    if (startProtectedMM > 0.05) {
-        const pts = sliceByArcLength(localChunk, 0, startProtectedMM);
-        if (pts.length >= 2) stripePieces.push({
-            points: pts, localStart: 0, localEnd: startProtectedMM, protectedStart: true, protectedEnd: false
-        });
-    }
-
-    // Normaler Mittelbereich: hier duerfen Farbwechsel wieder exakt global ausgerichtet sein.
-    const middleStart = startProtectedMM;
-    const middleEnd = Math.max(middleStart, chunkLen - endProtectedMM);
-    if (middleEnd - middleStart > 0.05) {
-        const midPts = sliceByArcLength(localChunk, middleStart, middleEnd);
-        splitByGlobalPeriod(midPts, globalStartMM + middleStart, CURB_STYLE.stripeLengthMM).forEach(mp => {
+    function pushStripeAlignedZone(zonePoints, zoneLocalStart, zoneGlobalStart, opts = {}) {
+        const zoneLen = polylineLength(zonePoints);
+        if (!zonePoints || zonePoints.length < 2 || zoneLen <= 0.05) return;
+        let pieces = splitByGlobalPeriod(zonePoints, zoneGlobalStart, CURB_STYLE.stripeLengthMM);
+        if (!pieces || pieces.length === 0) {
+            pieces = [{ points: zonePoints, localStart: 0, localEnd: zoneLen }];
+        }
+        pieces.forEach(mp => {
             stripePieces.push({
                 points: mp.points,
-                localStart: middleStart + mp.localStart,
-                localEnd: middleStart + mp.localEnd,
-                protectedStart: false,
-                protectedEnd: false
+                localStart: zoneLocalStart + mp.localStart,
+                localEnd: zoneLocalStart + mp.localEnd,
+                connectorStart: !!opts.connectorStart && mp.localStart < 0.05,
+                connectorEnd: !!opts.connectorEnd && (zoneLen - mp.localEnd) < 0.05,
+                inProtectedZone: !!opts.inProtectedZone
             });
         });
     }
 
-    // Geschuetzte Zapfen-Zone am Segmentende. Auch sie bleibt als Geometrieblock zusammen.
-    if (endProtectedMM > 0.05) {
-        const z0 = Math.max(startProtectedMM, chunkLen - endProtectedMM);
-        const pts = sliceByArcLength(localChunk, z0, chunkLen);
-        if (pts.length >= 2) stripePieces.push({
-            points: pts, localStart: z0, localEnd: chunkLen, protectedStart: false, protectedEnd: true
-        });
+    // Geschuetzte Nut-/Zapfen-Zonen bleiben geometrisch sicher, die Farbwechsel werden
+    // darin aber trotzdem auf das globale Farbraster ausgerichtet. So bleiben Rot/Weiss-
+    // Streifen auch am Schwalbenschwanz gleich breit.
+    if (startProtectedMM > 0.05) {
+        pushStripeAlignedZone(
+            sliceByArcLength(localChunk, 0, startProtectedMM),
+            0,
+            globalStartMM,
+            { connectorStart: hasStartNotch, inProtectedZone: true }
+        );
     }
 
-    // Bei einem extrem kurzen Segment koennen sich die Schutzzonen praktisch beruehren.
-    // Falls dadurch nichts erzeugt wurde, das komplette Segment als einen sicheren Block nehmen.
+    const middleStart = startProtectedMM;
+    const middleEnd = Math.max(middleStart, chunkLen - endProtectedMM);
+    if (middleEnd - middleStart > 0.05) {
+        pushStripeAlignedZone(
+            sliceByArcLength(localChunk, middleStart, middleEnd),
+            middleStart,
+            globalStartMM + middleStart,
+            { inProtectedZone: false }
+        );
+    }
+
+    if (endProtectedMM > 0.05) {
+        const z0 = Math.max(startProtectedMM, chunkLen - endProtectedMM);
+        pushStripeAlignedZone(
+            sliceByArcLength(localChunk, z0, chunkLen),
+            z0,
+            globalStartMM + z0,
+            { connectorEnd: hasEndTab, inProtectedZone: true }
+        );
+    }
+
     if (stripePieces.length === 0 && chunkLen > 0.05) {
         stripePieces.push({
             points: localChunk, localStart: 0, localEnd: chunkLen,
-            protectedStart: hasStartNotch, protectedEnd: hasEndTab
+            connectorStart: hasStartNotch, connectorEnd: hasEndTab,
+            inProtectedZone: hasStartNotch || hasEndTab
         });
     }
 
     stripePieces.forEach(piece => {
-        const globalMid = globalStartMM + (piece.localStart + piece.localEnd) / 2;
-        const stripeIndex = Math.floor(globalMid / CURB_STYLE.stripeLengthMM);
+        const stripeRefMM = globalStartMM + (piece.localStart + piece.localEnd) / 2;
+        const stripeIndex = Math.floor(stripeRefMM / CURB_STYLE.stripeLengthMM);
         const color = CURB_STYLE.colors[((stripeIndex % CURB_STYLE.colors.length) + CURB_STYLE.colors.length) % CURB_STYLE.colors.length];
-        const material = new THREE.MeshStandardMaterial({ color, roughness: 0.8 });
+        const material = new THREE.MeshStandardMaterial({ color, roughness: 0.8, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
 
         // Längsstruktur: exakt halb so dicht wie die frühere 5-Felder-pro-Farbblock-Teilung.
         // Die Quer-Stufen (rampSteps), welche die Curb-Neigung bilden, bleiben davon unberührt.
-        const smallPieces = (CURB_STYLE.rumbleEnabled && !piece.protectedStart && !piece.protectedEnd)
+        const smallPieces = (CURB_STYLE.rumbleEnabled && !piece.inProtectedZone)
             ? splitByGlobalPeriod(piece.points, globalStartMM + piece.localStart, surfaceCellMM)
             : [{ points: piece.points, localStart: 0, localEnd: polylineLength(piece.points) }];
 
@@ -2244,18 +3013,40 @@ function buildCurbRampMeshes(localChunk, thickness, totalHeight, baseHeight, out
 
             // Nur das Teilstück, das direkt an einer Segmentteilung liegt, trägt Nut/Zapfen.
             // Dadurch wird pro Unterbrechung genau EIN gemeinsamer Schwalbenschwanz erzeugt.
-            const pieceTouchesStart = hasStartNotch && piece.protectedStart && rp.localStart < 0.05;
-            const pieceTouchesEnd = hasEndTab && piece.protectedEnd && (polylineLength(piece.points) - rp.localEnd) < 0.05;
+            const pieceTouchesStart = !!piece.connectorStart;
+            const pieceTouchesEnd = !!piece.connectorEnd;
 
-            // In der Steckverbinder-Zone wird die vollständige Nut/Zapfen-Planform
-            // zuerst über die volle Curb-Breite trianguliert und ERST DANACH an die
-            // sechs Querhöhen angepasst. Dadurch bleibt die Steckverbindung vollständig.
-            if (piece.protectedStart || piece.protectedEnd) {
-                const connectorMeshes = buildCurbProtectedConnectorUpperMeshes(
-                    rp.points, thickness, totalHeight, baseHeight, outerSign,
-                    pieceTouchesStart, pieceTouchesEnd, sharedTab, material
-                );
-                connectorMeshes.forEach(m => meshes.push(m));
+            // V13: beide Seiten folgen jetzt exakt derselben Curb-Stufenlogik.
+            // Die weibliche Nut bleibt in JEDER vorhandenen Curb-Hoehenlage aktiv und
+            // durchdringt damit alle Ebenen vollstaendig. Der maennliche Zapfen wird in
+            // denselben Hoehenlagen mit derselben festen, aus der KOMPLETTEN Curb-Tiefe
+            // skalierten 2D-Schwalbenschwanzkontur aufgebaut. Dadurch bekommt auch das
+            // Positivteil die Curb-Stufen. Beim Zusammenstecken fuellen diese Stufen die
+            // entsprechenden Ausschnitte des Negativteils; einzig der umlaufende 0,2-mm-
+            // Versatz der Nut bleibt als Montage-Spiel bestehen.
+            if (piece.connectorStart || piece.connectorEnd) {
+                for (let step = 1; step <= CURB_STYLE.rampSteps; step++) {
+                    const innerBoundary = dir * (CURB_STYLE.innerFlatWidthMM + (step - 1) * stepWidth);
+                    const outerBoundary = dir * thickness;
+                    const offsetA = Math.min(innerBoundary, outerBoundary);
+                    const offsetB = Math.max(innerBoundary, outerBoundary);
+                    const z0 = baseHeight + (step - 1) * stepHeight;
+                    const z1 = z0 + Math.max(stepHeight, 0.03);
+
+                    const layerMeshes = buildCurbFixedConnectorLayerMeshes(
+                        rp.points, offsetA, offsetB, z0, z1,
+                        pieceTouchesStart, false,
+                        sharedTab, material
+                    );
+                    layerMeshes.forEach(m => meshes.push(m));
+                }
+                if (pieceTouchesEnd) {
+                    const maleMesh = buildCurbSteppedMaleDovetailMesh(
+                        rp.points, thickness, totalHeight, baseHeight, outerSign,
+                        sharedTab, material
+                    );
+                    if (maleMesh) meshes.push(maleMesh);
+                }
                 return;
             }
 
@@ -2267,8 +3058,14 @@ function buildCurbRampMeshes(localChunk, thickness, totalHeight, baseHeight, out
                 const offsetA = Math.min(innerBoundary, outerBoundary);
                 const offsetB = Math.max(innerBoundary, outerBoundary);
                 const zOffset = baseHeight + (step - 1) * stepHeight * riseFactor;
-                const extra = isRidge ? CURB_STYLE.rumbleHeightMM * riseFactor : 0;
-                const h = Math.max(stepHeight * riseFactor + extra, 0.03);
+                // V14: Die eigentliche Rampenlage endet exakt an ihrer Sollhoehe. In den
+                // aelteren Versionen wurde die Riefenhoehe auf die komplette, nach aussen
+                // verschachtelte Lage addiert. Dadurch ueberlappten sich benachbarte Z-Lagen
+                // grossflaechig. In der 3D-Vorschau sah das meist harmlos aus, im Slicer
+                // entstanden daraus jedoch Selbstueberschneidungen, Loecher und Reparatur-
+                // Artefakte. Die Riefe wird deshalb unten als eigener AUFLAGE-Streifen nur
+                // auf der tatsaechlich sichtbaren Treppenflaeche erzeugt.
+                const h = Math.max(stepHeight * riseFactor, 0.03);
 
                 const roundStart = !hasStartNotch && rpGlobalStart < 0.05;
                 const roundEnd = !hasEndTab && (pathLengthMM - rpGlobalEnd) < 0.05;
@@ -2284,6 +3081,36 @@ function buildCurbRampMeshes(localChunk, thickness, totalHeight, baseHeight, out
                     meshes.push(new THREE.Mesh(geometry, material));
                 } catch (err) {
                     console.error('Curb-Rampenstück übersprungen (ungültige Geometrie)', err);
+                }
+
+                // Riefen nur auf der sichtbaren horizontalen "Trittstufe" dieser Lage.
+                // Damit gibt es keine Volumen-Ueberlappung mit der darueberliegenden Lage.
+                if (isRidge && CURB_STYLE.rumbleHeightMM > 0.001) {
+                    const nextInner = (step < CURB_STYLE.rampSteps)
+                        ? dir * (CURB_STYLE.innerFlatWidthMM + step * stepWidth)
+                        : outerBoundary;
+                    const shelfA = Math.min(innerBoundary, nextInner);
+                    const shelfB = Math.max(innerBoundary, nextInner);
+                    if (shelfB - shelfA > 0.01) {
+                        const ridgeOutline = buildSegmentOutline(
+                            rp.points, shelfA, shelfB, false, false,
+                            roundStart, roundEnd, sharedTab
+                        );
+                        if (ridgeOutline.length >= 3) {
+                            const ridgeShape = new THREE.Shape(ridgeOutline.map(p => new THREE.Vector2(p.x, p.y)));
+                            try {
+                                const ridgeGeo = new THREE.ExtrudeGeometry(ridgeShape, {
+                                    depth: Math.max(CURB_STYLE.rumbleHeightMM * riseFactor, 0.01),
+                                    bevelEnabled: false,
+                                    steps: 1
+                                });
+                                ridgeGeo.translate(0, 0, zOffset + h);
+                                meshes.push(new THREE.Mesh(ridgeGeo, material));
+                            } catch (err) {
+                                console.error('Curb-Riefenauflage übersprungen (ungültige Geometrie)', err);
+                            }
+                        }
+                    }
                 }
             }
         });
@@ -2330,47 +3157,115 @@ function splitZRangeByDovetailLimits(z0, z1, hasStartNotch, hasEndTab) {
     return segments;
 }
 
-function buildBandeMeshes(localChunk, thickness, totalHeight, hasStartNotch, hasEndTab, roundStart, roundEnd, color) {
-    const meshes = [];
-    const layers = getBandeLayers();
-    const material = new THREE.MeshStandardMaterial({ color, metalness: 0.05, roughness: 0.9 });
+function bandeWidthFactorAt(h) {
+    const kf = BANDE_STYLE.profileKeyframes;
+    h = Math.max(0, Math.min(1, h));
+    for (let i = 0; i < kf.length - 1; i++) {
+        const a = kf[i], b = kf[i + 1];
+        if (h <= b.h + 1e-9) {
+            const t = Math.abs(b.h - a.h) < 1e-9 ? 0 : (h - a.h) / (b.h - a.h);
+            return a.w + (b.w - a.w) * Math.max(0, Math.min(1, t));
+        }
+    }
+    return kf[kf.length - 1].w;
+}
 
-    // EINE gemeinsame Zunge, abgeleitet von der VOLLEN Bauteilbreite (breiteste/unterste Stufe)
-    // und mittig zentriert (bei Bande ohnehin immer 0, da symmetrisch). Anders als beim Curb wird
-    // sie aber NICHT über die komplette Bauteilhöhe durchgezogen, sondern je nach Z-Position
-    // dieser Schicht auf BANDE_DOVETAIL_Z begrenzt (siehe splitZRangeByDovetailLimits).
-    const tabSize = computeTabSize(thickness / 2);
-    const sharedTab = { tabHalf: tabSize.tabHalf, tabTipHalf: tabSize.tabTipHalf, tabLength: tabSize.tabLength, possible: tabSize.possible, anchorOffset: 0 };
+// Verbindet zwei Umrisse auf unterschiedlichen Z-Höhen. Dadurch wird die schräge
+// Leitwandfläche wirklich planar/glatt statt als Treppe aus mehreren Extrusionen aufgebaut.
+function buildLoftSectionMesh(outline0, outline1, z0, z1, material) {
+    if (!outline0 || !outline1 || outline0.length < 3 || outline0.length !== outline1.length) return null;
 
-    layers.forEach(l => {
-        const layerHeight = totalHeight * (l.hTo - l.hFrom);
-        if (layerHeight <= 0.001) return;
-        const halfWidth = (thickness / 2) * l.w;
-        const z0 = totalHeight * l.hFrom;
-        const z1 = totalHeight * l.hTo;
+    const poly0 = outline0.map(p => ({ x: p.x, y: p.y }));
+    const poly1 = outline1.map(p => ({ x: p.x, y: p.y }));
+    let area = 0;
+    for (let i = 0; i < poly0.length; i++) {
+        const a = poly0[i], b = poly0[(i + 1) % poly0.length];
+        area += a.x * b.y - b.x * a.y;
+    }
+    if (area < 0) {
+        poly0.reverse();
+        poly1.reverse();
+    }
 
-        // Diese Stufe an den Schwalbenschwanz-Höhenschwellen aufteilen (meist nur 1 Teilstück,
-        // sofern die Stufe die 4mm/5mm-Grenzen nicht überschreitet).
-        const zSegments = splitZRangeByDovetailLimits(z0, z1, hasStartNotch, hasEndTab);
+    const n = poly0.length;
+    const positions = [];
+    for (const p of poly0) positions.push(p.x, p.y, z0);
+    for (const p of poly1) positions.push(p.x, p.y, z1);
 
-        zSegments.forEach(seg => {
-            const segHeight = seg.zTo - seg.zFrom;
-            if (segHeight <= 0.001) return;
+    const indices = [];
+    // Seitenflächen: gleiche Polygon-Topologie an beiden Höhen -> direkte Zuordnung.
+    for (let i = 0; i < n; i++) {
+        const j = (i + 1) % n;
+        indices.push(i, j, n + j, i, n + j, n + i);
+    }
 
-            const outline = buildSegmentOutline(localChunk, -halfWidth, halfWidth, seg.notch, seg.tab, roundStart, roundEnd, sharedTab);
-            if (outline.length >= 3) {
-                const shape = new THREE.Shape(outline.map(p => new THREE.Vector2(p.x, p.y)));
-                try {
-                    const geometry = new THREE.ExtrudeGeometry(shape, { depth: segHeight, bevelEnabled: false, steps: 1 });
-                    geometry.translate(0, 0, seg.zFrom);
-                    meshes.push(new THREE.Mesh(geometry, material));
-                } catch (err) {
-                    console.error('Bande-Stufe übersprungen (ungültige Geometrie)', err);
-                }
-            }
-        });
+    // Deckel/Boden triangulieren. ShapeUtils arbeitet mit der XY-Kontur.
+    const contour = poly0.map(p => new THREE.Vector2(p.x, p.y));
+    const tris = THREE.ShapeUtils.triangulateShape(contour, []);
+    tris.forEach(t => {
+        indices.push(t[2], t[1], t[0]);
+        indices.push(n + t[0], n + t[1], n + t[2]);
     });
 
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setIndex(indices);
+    geometry.computeVertexNormals();
+    return new THREE.Mesh(geometry, material);
+}
+
+function buildBandeMeshes(localChunk, thickness, totalHeight, outerSign, hasStartNotch, hasEndTab, roundStart, roundEnd, color) {
+    const meshes = [];
+    const material = new THREE.MeshStandardMaterial({ color, metalness: 0.05, roughness: 0.9, flatShading: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+    const side = outerSign >= 0 ? 1 : -1;
+    const centerOffset = side * thickness / 2; // Skizzenlinie = innere Kante, wie beim Curb
+
+    const tabSize = computeTabSize(thickness / 2);
+    const sharedTab = {
+        tabHalf: tabSize.tabHalf,
+        tabTipHalf: tabSize.tabTipHalf,
+        tabLength: tabSize.tabLength,
+        possible: tabSize.possible,
+        anchorOffset: centerOffset
+    };
+
+    // Profil-Knicke + Schwalbenschwanz-Höhengrenzen bilden echte Abschnittsgrenzen.
+    // Innerhalb eines Abschnitts ändert sich die Breite linear -> eine glatte Ebene.
+    const cuts = new Set([0, totalHeight]);
+    BANDE_STYLE.profileKeyframes.forEach(k => cuts.add(Math.max(0, Math.min(totalHeight, k.h * totalHeight))));
+    [BANDE_DOVETAIL_Z.tabHeightMM, BANDE_DOVETAIL_Z.notchHeightMM].forEach(z => {
+        if (z > 0 && z < totalHeight) cuts.add(z);
+    });
+    const zs = [...cuts].sort((a,b) => a-b);
+
+    for (let i = 0; i < zs.length - 1; i++) {
+        const z0 = zs[i], z1 = zs[i+1];
+        if (z1 - z0 < 1e-6) continue;
+        const mid = (z0 + z1) / 2;
+        const notch = hasStartNotch && mid <= BANDE_DOVETAIL_Z.notchHeightMM;
+        const tab = hasEndTab && mid <= BANDE_DOVETAIL_Z.tabHeightMM;
+
+        const hw0 = thickness * bandeWidthFactorAt(z0 / totalHeight) / 2;
+        const hw1 = thickness * bandeWidthFactorAt(z1 / totalHeight) / 2;
+        const offA0 = centerOffset - hw0, offB0 = centerOffset + hw0;
+        const offA1 = centerOffset - hw1, offB1 = centerOffset + hw1;
+        const o0 = buildSegmentOutline(localChunk, offA0, offB0, notch, tab, roundStart, roundEnd, sharedTab);
+        const o1 = buildSegmentOutline(localChunk, offA1, offB1, notch, tab, roundStart, roundEnd, sharedTab);
+
+        let mesh = buildLoftSectionMesh(o0, o1, z0, z1, material);
+        if (!mesh) {
+            // Sicherheits-Fallback nur für Sonderfälle mit unterschiedlicher Polygon-Topologie.
+            const hw = (hw0 + hw1) / 2;
+            const outline = buildSegmentOutline(localChunk, centerOffset-hw, centerOffset+hw, notch, tab, roundStart, roundEnd, sharedTab);
+            if (outline.length >= 3) {
+                const shape = new THREE.Shape(outline.map(p => new THREE.Vector2(p.x, p.y)));
+                const geometry = new THREE.ExtrudeGeometry(shape, { depth: z1-z0, bevelEnabled:false, steps:1 });
+                geometry.translate(0,0,z0);
+                mesh = new THREE.Mesh(geometry, material);
+            }
+        }
+        if (mesh) meshes.push(mesh);
+    }
     return meshes;
 }
 
@@ -2440,7 +3335,7 @@ function generate3DModel() {
         if (pathPoints.length < 2) return;
         const chunks = splitPathIntoSegments(pathPoints);
         const isCurb = elementTypeValue === 'curb';
-        const outerSign = path.outerSign >= 0 ? 1 : -1;
+        const outerSign = path.outerSign >= 0 ? -1 : 1; // Y-Achse wird beim Export gespiegelt; Vorzeichen kompensiert die sichtbare Außenseite
         const pathLengthMM = chunks.reduce((sum, c) => sum + polylineLength(c), 0);
         let pathArcOffsetMM = 0;
 
@@ -2491,7 +3386,7 @@ function generate3DModel() {
                 // geschnittene Geometrie an derselben Stelle wird so vermieden).
                 let outline;
                 try {
-                    outline = buildSegmentOutline(localChunk, offsetA, offsetB, hasStartNotch, hasEndTab, roundStart, roundEnd, sharedTab);
+                    outline = buildSegmentOutline(localChunk, offsetA, offsetB, hasStartNotch, false, roundStart, roundEnd, sharedTab);
                 } catch (err) {
                     console.error('Fehler beim Erzeugen des Umrisses', err);
                     return;
@@ -2503,7 +3398,7 @@ function generate3DModel() {
                         // der X-Y-Ebene und extrudiert die Höhe entlang Z - exakt die gewünschte
                         // "flach auf dem Druckbett liegend" Orientierung für den STL-Export.
                         const geometry = new THREE.ExtrudeGeometry(shape, { depth: bodyHeight, bevelEnabled: false, steps: 1 });
-                        const material = new THREE.MeshStandardMaterial({ color: profile.color, metalness: 0.1, roughness: 0.85 });
+                        const material = new THREE.MeshStandardMaterial({ color: profile.color, metalness: 0.1, roughness: 0.85, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
                         partGroup.add(new THREE.Mesh(geometry, material));
                     } catch (err) {
                         console.error('Ungültige Segment-Geometrie (Selbstüberschneidung?) - übersprungen', err);
@@ -2513,22 +3408,28 @@ function generate3DModel() {
                 const rampMeshes = buildCurbRampMeshes(localChunk, profile.thickness, profile.height, bodyHeight, outerSign, pathArcOffsetMM, pathLengthMM, hasStartNotch, hasEndTab, sharedTab);
                 rampMeshes.forEach(m => partGroup.add(m));
             } else {
-                // Bande: gestufte, sich nach oben verjüngende Beton-Leitwand-Form (symmetrisch
-                // um die Skizzenlinie), jede Stufe mit eigener Zunge/Nut.
-                const bandeMeshes = buildBandeMeshes(localChunk, profile.thickness, profile.height, hasStartNotch, hasEndTab, roundStart, roundEnd, profile.color);
+                // Bande: gleiche Grundgeometrie, aber mit echter glatter Schräge. Die Skizzenlinie
+                // ist wie beim Curb die innere Kante; outerSign bestimmt innen/außen.
+                const bandeMeshes = buildBandeMeshes(localChunk, profile.thickness, profile.height, outerSign, hasStartNotch, hasEndTab, roundStart, roundEnd, profile.color);
                 bandeMeshes.forEach(m => partGroup.add(m));
             }
 
             pathArcOffsetMM += polylineLength(chunk);
             if (partGroup.children.length === 0) return;
 
-            const bbox = new THREE.Box3().setFromObject(partGroup);
+            const previewWrapper = new THREE.Group();
+            previewWrapper.position.set(localOrigin.x, localOrigin.y, 0);
+            previewWrapper.add(partGroup);
+            trackPreviewGroup.add(previewWrapper);
+
+            const exportGroup = cloneGroupWithResources(partGroup);
+            const bbox = new THREE.Box3().setFromObject(exportGroup);
             const bboxX = bbox.max.x - bbox.min.x;
             const bboxY = bbox.max.y - bbox.min.y;
             const fitsBed = bboxX <= bedWidthMM && bboxY <= bedLengthMM;
 
-            const plateIndex = placeInLayout(partGroup, bbox);
-            trackGroup.add(partGroup);
+            const plateIndex = placeInLayout(exportGroup, bbox);
+            trackGroup.add(exportGroup);
 
             const lengthMM = polylineLength(chunk);
 
@@ -2539,7 +3440,8 @@ function generate3DModel() {
                 chunkIndex,
                 type: elementTypeValue,
                 lengthMM,
-                mesh: partGroup,
+                mesh: exportGroup,
+                previewMesh: previewWrapper,
                 fitsBed,
                 plateIndex
             });
@@ -2558,7 +3460,15 @@ function generate3DModel() {
         return;
     }
 
-    fitCameraToScene();
+    generatedPreview = buildGeneratedPreviewData(elementTypeValue, profile.thickness);
+    redraw2DCanvas();
+    updateTrackPreviewSurface();
+    if (viewportMode !== '2d') {
+        fitCameraToScene(viewportMode === 'layout3d' ? 'layout' : 'track');
+    }
+    if (window.matchMedia && window.matchMedia('(max-width: 900px)').matches) {
+        setMobileSection('preview');
+    }
 }
 
 // --- 10. STÜCKLISTE ---
@@ -2680,33 +3590,39 @@ async function buildPlate3MFBytes(segments) {
         return idx;
     }
 
-    let objectsXML = '';
+    // V14: Ein Segment besteht konstruktiv aus vielen einzeln geschlossenen Teilkoerpern
+    // (Basis, Querlagen, Farb-/Strukturabschnitte, Connector-Lagen). In V13 wurden deren
+    // Dreiecke stumpf in EIN 3MF-Mesh kopiert. Beruehrende bzw. teilweise ueberlappende
+    // geschlossene Koerper innerhalb eines einzigen Meshes erzeugen jedoch nicht-manifold
+    // Kanten und doppelte Innenflaechen. Bambu/Orca reparieren so etwas beim Slicen und
+    // koennen dabei genau die beobachteten Loecher/Dreiecks-Artefakte erzeugen.
+    //
+    // Deshalb bleiben die geschlossenen Teilkoerper jetzt als echte 3MF-Komponenten erhalten.
+    // Ein Parent-Object fasst sie zu EINEM Druckteil zusammen. Das ist 3MF-konform und laesst
+    // den Slicer die Volumina sauber als Komponenten desselben Bauteils behandeln, anstatt
+    // eine ungueltige Dreiecks-Suppe reparieren zu muessen. Farbe bleibt je Komponente erhalten.
+    let resourcesXML = '';
     let itemsXML = '';
-    let objectId = 2; // 1 ist für die Farb-Resource reserviert
-
+    let objectId = 2; // 1 ist die Farb-Resource
     const v = new THREE.Vector3();
 
     segments.forEach(seg => {
         seg.mesh.updateMatrixWorld(true);
-
-        // Alle Meshes DIESES Druckteils (Basis, Rampenstufen, Streifen, ...) werden zu EINEM
-        // gemeinsamen <object> zusammengefasst (Vertex-Indizes je Mesh um vertexOffset
-        // verschoben), statt wie zuvor ein eigenes <object> pro Einzel-Mesh zu exportieren.
-        // Grund: BambuStudio meldet bei vielen separaten, überlappend/gestapelt positionierten
-        // Objekten "Mehrteiliges Objekt erkannt" - ein Druckteil soll aber als EIN Objekt in
-        // der Objektliste erscheinen. Farbe bleibt trotzdem pro Dreieck erhalten (Face Coloring).
-        let verticesXML = '';
-        let trianglesXML = '';
-        let vertexOffset = 0;
+        const componentIds = [];
 
         seg.mesh.traverse(node => {
             if (!node.isMesh) return;
             const geometry = node.geometry;
-            const posAttr = geometry.attributes.position;
-            if (!posAttr) return;
+            const posAttr = geometry && geometry.attributes && geometry.attributes.position;
+            if (!posAttr || posAttr.count < 3) return;
 
-            const hexColor = '#' + node.material.color.getHexString().toUpperCase();
+            const mat = Array.isArray(node.material) ? node.material[0] : node.material;
+            const color = mat && mat.color ? mat.color : new THREE.Color(0xffffff);
+            const hexColor = '#' + color.getHexString().toUpperCase();
             const matIdx = materialIndexFor(hexColor);
+
+            let verticesXML = '';
+            let trianglesXML = '';
 
             for (let i = 0; i < posAttr.count; i++) {
                 v.fromBufferAttribute(posAttr, i);
@@ -2714,50 +3630,39 @@ async function buildPlate3MFBytes(segments) {
                 verticesXML += `<vertex x="${v.x.toFixed(4)}" y="${v.y.toFixed(4)}" z="${v.z.toFixed(4)}"/>`;
             }
 
-            // WICHTIG: Farbe wird pro DREIECK über pid/p1 auf die m:colorgroup gesetzt
-            // ("Face Coloring") statt nur einmal auf das <object> - laut BambuStudio-Wiki
-            // werden nur Vertex- oder Face-Coloring automatisch erkannt, ein reines
-            // objektweites <basematerials>-pid wird von BambuStudio ignoriert (bleibt grau),
-            // auch wenn Windows' eigener 3D-Viewer (breiterer 3MF-Support) es korrekt zeigt.
             const index = geometry.index;
             if (index) {
                 for (let i = 0; i < index.count; i += 3) {
-                    const a = index.getX(i) + vertexOffset;
-                    const b = index.getX(i + 1) + vertexOffset;
-                    const c = index.getX(i + 2) + vertexOffset;
-                    trianglesXML += `<triangle v1="${a}" v2="${b}" v3="${c}" pid="1" p1="${matIdx}"/>`;
+                    trianglesXML += `<triangle v1="${index.getX(i)}" v2="${index.getX(i + 1)}" v3="${index.getX(i + 2)}" pid="1" p1="${matIdx}"/>`;
                 }
             } else {
-                for (let i = 0; i < posAttr.count; i += 3) {
-                    const a = i + vertexOffset, b = i + 1 + vertexOffset, c = i + 2 + vertexOffset;
-                    trianglesXML += `<triangle v1="${a}" v2="${b}" v3="${c}" pid="1" p1="${matIdx}"/>`;
+                for (let i = 0; i + 2 < posAttr.count; i += 3) {
+                    trianglesXML += `<triangle v1="${i}" v2="${i + 1}" v3="${i + 2}" pid="1" p1="${matIdx}"/>`;
                 }
             }
 
-            vertexOffset += posAttr.count;
+            if (!trianglesXML) return;
+            const childId = objectId++;
+            resourcesXML += `<object id="${childId}" type="model"><mesh><vertices>${verticesXML}</vertices><triangles>${trianglesXML}</triangles></mesh></object>`;
+            componentIds.push(childId);
         });
 
-        if (!trianglesXML) return; // dieses Druckteil hatte keine exportierbare Geometrie
+        if (!componentIds.length) return;
 
-        // Kein objektweites pid/pindex mehr (ein Objekt kann jetzt mehrere Farben enthalten) -
-        // die Farbe steckt vollständig in den Dreiecken selbst.
-        objectsXML += `<object id="${objectId}" type="model"><mesh><vertices>${verticesXML}</vertices><triangles>${trianglesXML}</triangles></mesh></object>`;
-        itemsXML += `<item objectid="${objectId}"/>`;
-        objectId++;
+        const parentId = objectId++;
+        const componentsXML = componentIds.map(id => `<component objectid="${id}"/>`).join('');
+        resourcesXML += `<object id="${parentId}" type="model"><components>${componentsXML}</components></object>`;
+        itemsXML += `<item objectid="${parentId}"/>`;
     });
 
-    if (!objectsXML) return null;
+    if (!itemsXML) return null;
 
-    // m:colorgroup (Materials & Properties Extension) statt/zusätzlich zu <basematerials> -
-    // das ist der Mechanismus, den BambuStudio/OrcaSlicer für automatische Farberkennung
-    // beim 3MF-Import tatsächlich auswerten.
     const colorGroupXML = colorList.map(c => `<m:color color="${c}FF"/>`).join('');
-
     const modelXML = `<?xml version="1.0" encoding="UTF-8"?>
 <model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:m="http://schemas.microsoft.com/3dmanufacturing/material/2015/02">
 <resources>
 <m:colorgroup id="1">${colorGroupXML}</m:colorgroup>
-${objectsXML}
+${resourcesXML}
 </resources>
 <build>${itemsXML}</build>
 </model>`;
@@ -2772,7 +3677,6 @@ ${objectsXML}
         `<Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/></Relationships>`);
 
     zip.file('3D/3dmodel.model', modelXML);
-
     return zip.generateAsync({ type: 'uint8array' });
 }
 
@@ -2869,9 +3773,9 @@ function applyProjectData(data) {
     document.getElementById('trackLength').value = Number.isFinite(storedLength) ? (storedAsCM ? storedLength : storedLength * 100) : 270;
     document.getElementById('trackWidth').value = Number.isFinite(storedWidth) ? (storedAsCM ? storedWidth : storedWidth * 100) : 150;
     document.getElementById('elementType').value = data.elementType ?? 'bande';
-    document.getElementById('curbHeight').value = data.curbHeight ?? '2';
+    document.getElementById('curbHeight').value = data.curbHeight ?? '1.2';
     document.getElementById('curbDepth').value = data.curbDepth ?? '20';
-    if (document.getElementById('curbPatternLength')) document.getElementById('curbPatternLength').value = data.curbPatternLength ?? '15';
+    if (document.getElementById('curbPatternLength')) document.getElementById('curbPatternLength').value = data.curbPatternLength ?? '20';
     document.getElementById('bandeHeight').value = data.bandeHeight ?? '15';
     document.getElementById('bandeThickness').value = data.bandeThickness ?? '10';
     document.getElementById('bedWidth').value = data.bedWidth ?? '250';
@@ -2895,6 +3799,7 @@ function applyProjectData(data) {
         currentPresetFilename = '';
         bgImage = null;
         redraw2DCanvas();
+        updateTrackPreviewSurface();
     }
     updateSketchStatus();
     updateDeleteButtonState();

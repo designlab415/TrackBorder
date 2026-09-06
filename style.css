@@ -19,9 +19,25 @@ body { background: #eef0f3; color: #1c1d1f; }
 
 #sidebarHeader {
     padding: 2px 4px 6px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
 }
+.sidebar-title-block {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.sidebar-header-actions { display: flex; align-items: center; gap: 6px; }
+.mobile-sidebar-close { display: none; }
 #sidebarHeader h2 { font-size: 1.2rem; font-weight: 700; color: #111; }
 .scale-badge { font-size: 0.78rem; color: #6b6f76; }
+#saveQuickBtn {
+    margin-top: 2px;
+    width: auto;
+    white-space: nowrap;
+}
 
 /* ============ TAB-LEISTE ============ */
 #tabBar {
@@ -38,17 +54,30 @@ body { background: #eef0f3; color: #1c1d1f; }
     color: #4a4d53;
     padding: 9px 4px;
     border-radius: 9px;
-    font-size: 0.8rem;
-    font-weight: 600;
+    font-size: 0.77rem;
+    font-weight: 700;
     cursor: pointer;
     white-space: nowrap;
 }
 .tab-btn.active {
-    background: #14151a;
     color: #fff;
     box-shadow: 0 2px 6px rgba(0,0,0,0.18);
 }
+.tab-btn[data-tab="sketch"].active { background: #2563eb; }
+.tab-btn[data-tab="part"].active { background: #15803d; }
+.tab-btn[data-tab="export"].active { background: #b45309; }
 .tab-btn:hover:not(.active) { background: #d9dce1; }
+
+.workflow-hint {
+    margin-top: -4px;
+    padding: 7px 10px;
+    border-radius: 9px;
+    background: #eef1f5;
+    color: #6b6f76;
+    font-size: 0.72rem;
+    font-weight: 600;
+    line-height: 1.35;
+}
 
 .tab-panel { display: none; flex-direction: column; gap: 12px; }
 .tab-panel.active { display: flex; }
@@ -62,7 +91,7 @@ body { background: #eef0f3; color: #1c1d1f; }
     display: flex;
     flex-direction: column;
     gap: 9px;
-    box-shadow: 0 1px 3px rgba(20,20,30,0.04);
+    box-shadow: 0 2px 8px rgba(20,20,30,0.05);
 }
 .card h3 {
     display: flex;
@@ -197,20 +226,98 @@ button:disabled { background: #f3f3f4; color: #b5b7bb; border-color: #ececee; cu
     min-width: 0;
 }
 
-.viewport-container .label {
+.view-heading {
+    background: rgba(20,21,26,0.92);
+    color: #fff;
+    padding: 7px 12px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    border-radius: 999px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.14);
+}
+
+.viewport-topbar {
     position: absolute;
     top: 10px;
     left: 10px;
-    background: rgba(255,255,255,0.92);
-    color: #111;
-    padding: 4px 10px;
-    font-size: 0.76rem;
-    font-weight: 600;
+    right: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    z-index: 22;
+    pointer-events: none;
+}
+.viewport-topbar > * { pointer-events: auto; }
+
+.view-switch {
+    display: inline-flex;
+    gap: 6px;
+    padding: 4px;
     border-radius: 999px;
-    z-index: 10;
+    background: rgba(255,255,255,0.92);
+    border: 1px solid rgba(220,223,228,0.95);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.14);
+}
+.view-switch-btn {
+    width: auto;
+    flex: 0 1 auto;
+    border: 1px solid transparent;
+    padding: 8px 12px;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #374151;
+    transition: background 0.15s ease, color 0.15s ease, transform 0.05s ease;
+}
+#viewMode2DBtn { background: #eaf2ff; border-color: #cfe0ff; }
+#viewMode3DBtn { background: #eaf8ef; border-color: #ccebd7; }
+#viewModeLayoutBtn { background: #fff2df; border-color: #f4d7ac; }
+#viewMode2DBtn.active { background: #2563eb; color: #fff; }
+#viewMode3DBtn.active { background: #15803d; color: #fff; }
+#viewModeLayoutBtn.active { background: #b45309; color: #fff; }
+
+#viewportBottomBar {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    z-index: 22;
+    pointer-events: none;
+}
+#viewportBottomBar > * { pointer-events: auto; }
+#viewportBottomBar #measureModeBtn {
+    width: auto;
+    flex-shrink: 0;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.18);
+}
+#viewportBottomBar #measureStatus {
+    margin: 0;
+    background: rgba(255,255,255,0.94);
+    border: 1px solid #dcdfe4;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.14);
 }
 
-canvas, #threeContainer { width: 100%; height: 100%; display: block; }
+canvas, #threeContainer {
+    width: 100%;
+    height: 100%;
+    display: block;
+    position: absolute;
+    inset: 0;
+}
+#threeContainer { display: none; }
+
+.viewport-container.mode-3d #sketchCanvas,
+.viewport-container.mode-3d .path-finish-popup,
+.viewport-container.mode-3d .point-delete-popup,
+.viewport-container.mode-3d #zoomControls,
+.viewport-container.mode-3d #viewportBottomBar {
+    display: none !important;
+}
+.viewport-container.mode-3d #threeContainer { display: block; }
 
 #partList { font-size: 0.82rem; background: #f7f8f9; padding: 6px; border-radius: 8px; max-height: 220px; overflow-y: auto; }
 #partList table { width: 100%; border-collapse: collapse; }
@@ -253,7 +360,7 @@ canvas, #threeContainer { width: 100%; height: 100%; display: block; }
 /* ============ ZOOM-BUTTONS (v.a. für Touch, Mausrad geht weiterhin) ============ */
 #zoomControls {
     position: absolute;
-    bottom: 14px;
+    bottom: 70px;
     right: 14px;
     display: flex;
     flex-direction: column;
@@ -287,64 +394,288 @@ canvas, #threeContainer { width: 100%; height: 100%; display: block; }
 /* RESPONSIVE: MOBILGERÄTE (< 900px)                            */
 /* ============================================================ */
 @media (max-width: 900px) {
+    html, body { width: 100%; min-height: 100%; overflow: hidden; }
+    body { background: #eef0f3; }
+
     #app {
         flex-direction: column;
+        width: 100%;
+        height: 100vh;
+        height: 100svh;
         height: 100dvh;
+        padding-top: env(safe-area-inset-top);
+        overflow: hidden;
     }
 
     #mobileTopBar {
         display: flex;
         align-items: center;
-        padding: 10px 14px;
-        background: #f5f6f8;
-        border-bottom: 1px solid #e0e2e6;
+        justify-content: space-between;
+        gap: 10px;
+        min-height: 54px;
+        padding: 8px 12px;
+        background: rgba(245,246,248,0.97);
+        border-bottom: 1px solid #d9dde3;
         flex-shrink: 0;
+        z-index: 100;
+    }
+    .mobile-title { min-width: 0; }
+    .mobile-title strong { font-size: 1rem; }
+    .mobile-title span { font-size: 0.72rem; }
+    .mobile-save-btn {
+        width: 42px;
+        min-width: 42px;
+        height: 42px;
+        padding: 0;
+        border-radius: 12px;
+        background: #fff;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+        font-size: 1rem;
     }
 
     #mobileBottomNav {
-        display: flex;
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
         flex-shrink: 0;
-        background: #f5f6f8;
-        border-top: 1px solid #e0e2e6;
-        padding: 4px 6px calc(4px + env(safe-area-inset-bottom));
+        background: rgba(245,246,248,0.98);
+        border-top: 1px solid #d9dde3;
+        padding: 5px 6px calc(5px + env(safe-area-inset-bottom));
         gap: 4px;
+        z-index: 100;
     }
     .mnav-btn {
-        flex: 1;
+        min-width: 0;
+        width: 100%;
+        min-height: 52px;
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 2px;
+        justify-content: center;
+        gap: 3px;
         border: none;
         background: transparent;
-        padding: 7px 2px;
-        border-radius: 10px;
+        padding: 6px 2px;
+        border-radius: 12px;
         font-size: 1.05rem;
         color: #6b6f76;
     }
-    .mnav-btn span { font-size: 0.66rem; font-weight: 600; }
-    .mnav-btn.active { background: #14151a; color: #fff; }
+    .mnav-btn span {
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 0.65rem;
+        font-weight: 700;
+    }
+    .mnav-btn.active {
+        background: #14151a;
+        color: #fff;
+        box-shadow: 0 2px 7px rgba(0,0,0,0.14);
+    }
 
-    /* Auf dem Handy jeweils NUR EINE Ansicht zeigen (Skizze / 3D / Einstellungen),
-       gesteuert über die body-Klasse mview-* (siehe app.js). */
-    #sidebar, #viewports { flex: 1; min-height: 0; }
-    #viewports { flex-direction: column; padding: 8px; gap: 8px; }
+    #sidebar, #viewports {
+        flex: 1;
+        min-height: 0;
+        width: 100%;
+    }
 
-    body.mview-sketch #sidebar,
-    body.mview-sketch #viewport3D { display: none; }
-    body.mview-sketch #viewport2D { display: flex; }
+    #sidebar {
+        display: none;
+        width: 100%;
+        border-right: none;
+        padding: 10px;
+        gap: 10px;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+        padding-bottom: 18px;
+    }
+    #sidebarHeader, #tabBar, #workflowHint { display: none !important; }
+    .mobile-sidebar-close { display: none; }
 
-    body.mview-3d #sidebar,
-    body.mview-3d #viewport2D { display: none; }
-    body.mview-3d #viewport3D { display: flex; }
+    #mobileSidebarBackdrop {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 180;
+        background: rgba(15, 18, 24, 0.46);
+        backdrop-filter: blur(2px);
+        -webkit-backdrop-filter: blur(2px);
+    }
 
-    body.mview-settings #viewport2D,
-    body.mview-settings #viewport3D { display: none; }
-    body.mview-settings #sidebar { display: flex; width: 100%; }
+    body.mobile-sidebar-open #mobileSidebarBackdrop { display: block; }
+    body.mobile-sidebar-open #sidebar {
+        display: flex !important;
+        position: fixed;
+        z-index: 190;
+        left: 0;
+        top: calc(env(safe-area-inset-top) + 54px);
+        bottom: calc(62px + env(safe-area-inset-bottom));
+        width: min(88vw, 390px);
+        max-width: 390px;
+        padding: 12px;
+        background: #f5f6f8;
+        border-right: 1px solid #d9dde3;
+        box-shadow: 14px 0 34px rgba(0,0,0,0.20);
+        overflow-y: auto;
+        transform: translateX(0);
+        -webkit-overflow-scrolling: touch;
+    }
+    body.mobile-sidebar-open #sidebarHeader {
+        display: flex !important;
+        position: sticky;
+        top: -12px;
+        z-index: 3;
+        margin: -12px -12px 8px;
+        padding: 12px;
+        background: rgba(245,246,248,0.98);
+        border-bottom: 1px solid #e0e2e6;
+    }
+    body.mobile-sidebar-open #tabBar {
+        display: flex !important;
+        position: sticky;
+        top: 58px;
+        z-index: 2;
+        margin-bottom: 4px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+    body.mobile-sidebar-open #workflowHint { display: block !important; }
+    body.mobile-sidebar-open .mobile-sidebar-close { display: inline-flex; width: 40px; min-width: 40px; align-items: center; justify-content: center; }
+    body.mobile-sidebar-open .sidebar-header-actions { display: flex; gap: 6px; align-items: center; }
+    body.mobile-sidebar-open #saveQuickBtn { display: inline-flex; }
+    body.mobile-sidebar-open .tab-panel.active { display: flex !important; }
+    body.mobile-sidebar-open .tab-panel:not(.active) { display: none !important; }
 
-    #sidebar { border-right: none; }
+    .mnav-menu-btn.active-menu {
+        background: #e7e9ec;
+        color: #111;
+        box-shadow: inset 0 0 0 1px #cfd3da;
+    }
+    .tab-panel { width: 100%; }
+    .card {
+        border-radius: 16px;
+        padding: 13px;
+        gap: 10px;
+        box-shadow: 0 2px 8px rgba(22,27,35,0.05);
+    }
+    .card h3 { font-size: 0.95rem; }
 
-    /* größere Tap-Ziele */
-    button, input, select { font-size: 0.95rem; padding: 12px; }
-    .popup-btn { width: 38px; height: 38px; }
+    #viewports {
+        display: none;
+        padding: 0;
+        gap: 0;
+        min-height: 0;
+    }
+    .viewport-container {
+        width: 100%;
+        height: 100%;
+        min-height: 0;
+        border: none;
+        border-radius: 0;
+    }
+
+    body.mview-draw #viewports,
+    body.mview-preview #viewports { display: flex; }
+    body.mview-draw #sidebar,
+    body.mview-preview #sidebar { display: none; }
+
+    body.mview-model #sidebar,
+    body.mview-export #sidebar { display: flex; }
+    body.mview-model #viewports,
+    body.mview-export #viewports { display: none; }
+
+    body.mview-model .tab-panel[data-panel="part"],
+    body.mview-export .tab-panel[data-panel="export"] { display: flex; }
+    body.mview-model .tab-panel:not([data-panel="part"]),
+    body.mview-export .tab-panel:not([data-panel="export"]) { display: none !important; }
+
+    .viewport-topbar {
+        top: 8px;
+        left: 8px;
+        right: 8px;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+    }
+    .view-heading {
+        padding: 7px 10px;
+        font-size: 0.72rem;
+        flex-shrink: 0;
+    }
+    .view-switch {
+        flex: 1;
+        min-width: 0;
+        justify-content: stretch;
+        gap: 3px;
+        padding: 3px;
+        border-radius: 14px;
+    }
+    .view-switch-btn {
+        flex: 1 1 0;
+        min-width: 0;
+        padding: 8px 5px;
+        font-size: 0.68rem;
+        white-space: nowrap;
+    }
+
+    #viewportBottomBar {
+        left: 8px;
+        right: 8px;
+        bottom: 8px;
+        gap: 6px;
+        flex-direction: row;
+        align-items: center;
+    }
+    #viewportBottomBar #measureModeBtn {
+        width: auto;
+        min-width: 104px;
+        min-height: 42px;
+        flex-shrink: 0;
+    }
+    #viewportBottomBar #measureStatus {
+        min-width: 0;
+        flex: 1;
+        max-height: 48px;
+        overflow: hidden;
+        font-size: 0.68rem;
+        padding: 7px 8px;
+    }
+    #zoomControls {
+        right: 8px;
+        bottom: 68px;
+    }
+    #zoomControls button {
+        width: 44px;
+        height: 44px;
+    }
+
+    /* iOS Safari zoomt bei kleineren Formularschriften automatisch hinein. */
+    input, select, textarea {
+        font-size: 16px !important;
+        min-height: 46px;
+    }
+    button { min-height: 44px; }
+    .popup-btn { width: 42px; height: 42px; min-height: 42px; }
+    .button-row { gap: 7px; }
+    .input-row { gap: 8px; }
+
+    /* Verhindert versehentliche Textauswahl beim Zeichnen/Orbit auf Touch-Geräten. */
+    #sketchCanvas, #threeContainer, .viewport-container {
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-touch-callout: none;
+    }
+
 }
+
+@media (max-width: 900px) and (orientation: landscape) and (max-height: 600px) {
+    #mobileTopBar { min-height: 46px; padding-top: 4px; padding-bottom: 4px; }
+    #mobileBottomNav { padding-top: 3px; }
+    .mnav-btn { min-height: 44px; flex-direction: row; gap: 5px; }
+    .mnav-btn span { font-size: 0.64rem; }
+    .viewport-topbar { top: 5px; }
+    #viewportBottomBar { bottom: 5px; }
+}
+
+.measure-active { background: #14151a !important; color: #fff !important; border-color: #14151a !important; }

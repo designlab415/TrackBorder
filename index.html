@@ -20,23 +20,31 @@
                 <strong>RC Track Builder</strong>
                 <span>1:50</span>
             </div>
+            <button id="mobileSaveBtn" class="mobile-save-btn" type="button" aria-label="Projekt speichern">💾</button>
         </div>
 
         <!-- Control Panel -->
         <div id="sidebar">
             <div id="sidebarHeader">
-                <h2>RC Track Builder</h2>
-                <span class="scale-badge">Konfigurator · Maßstab 1:50</span>
+                <div class="sidebar-title-block">
+                    <h2>RC Track Builder</h2>
+                    <span class="scale-badge">Konfigurator · Maßstab 1:50</span>
+                </div>
+                <div class="sidebar-header-actions">
+                    <button id="saveQuickBtn" class="btn-secondary btn-compact" type="button">💾 Speichern</button>
+                    <button id="mobileSidebarClose" class="btn-secondary btn-compact mobile-sidebar-close" type="button" aria-label="Menü schließen">✕</button>
+                </div>
             </div>
 
             <!-- Tab-Leiste -->
             <div id="tabBar">
-                <button class="tab-btn active" data-tab="sketch">✏️ Skizze</button>
-                <button class="tab-btn" data-tab="part">🧱 Bauteil</button>
-                <button class="tab-btn" data-tab="export">📦 Export &amp; Speichern</button>
+                <button class="tab-btn active" data-tab="sketch">🛤️ Modellierer</button>
+                <button class="tab-btn" data-tab="part">🧊 3D-Modell</button>
+                <button class="tab-btn" data-tab="export">📦 Export</button>
             </div>
+            <div id="workflowHint" class="workflow-hint">1 · Strecke wählen und Verlauf zeichnen</div>
 
-            <!-- TAB: Skizze -->
+            <!-- TAB: Modellierer -->
             <div class="tab-panel active" data-panel="sketch">
                 <div class="card">
                     <h3><span class="card-icon">📍</span>Strecken-Vorlage</h3>
@@ -68,7 +76,7 @@
                         <strong>Strang:</strong> Tippen/Klicken setzt Punkte. Grünes Häkchen neben dem letzten Punkt (oder Doppelklick/Enter am PC) schließt den Strang ab.<br>
                         <strong>Punkt bearbeiten:</strong> Antippen wählt aus (gelber Ring + rotes ✕) - ziehen zum Verschieben, ✕ oder Button zum Löschen.<br>
                         <strong>Punkt einfügen:</strong> Button unten aktivieren, dann auf eine Linie tippen. Am PC geht auch Rechtsklick direkt.<br>
-                        <span class="legend-dot legend-green"></span> Start &nbsp; <span class="legend-dot legend-red"></span> Ende &nbsp; <span class="legend-dot legend-orange"></span> Curb-Außenseite (antippen zum Umkehren)
+                        <span class="legend-dot legend-green"></span> Start &nbsp; <span class="legend-dot legend-red"></span> Ende &nbsp; <span class="legend-dot legend-orange"></span> Außenseite von Curb/Bande (antippen zum Umkehren)
                     </div>
 
                     <div class="hint" id="sketchStatus">Keine Skizze vorhanden.</div>
@@ -79,7 +87,7 @@
                         <button id="finishPathBtn" class="btn-secondary">Strang abschließen</button>
                         <button id="deleteSelectedPointBtn" class="btn-secondary" disabled>Punkt löschen</button>
                     </div>
-                    <button id="toggleOuterSideBtn" class="btn-secondary">Curb-Außenseite umkehren ⇄</button>
+                    <button id="toggleOuterSideBtn" class="btn-secondary">Außenseite umkehren ⇄</button>
                     <button id="clearPoints" class="btn-danger-outline">Skizze Löschen</button>
                 </div>
             </div>
@@ -87,24 +95,7 @@
             <!-- TAB: Bauteil -->
             <div class="tab-panel" data-panel="part">
                 <div class="card">
-                    <h3><span class="card-icon">🖨️</span>Druckbett-Größe</h3>
-                    <div class="input-row">
-                        <div>
-                            <label>Breite X (mm) *</label>
-                            <input type="number" id="bedWidth" value="250" step="1" min="20">
-                        </div>
-                        <div>
-                            <label>Tiefe Y (mm) *</label>
-                            <input type="number" id="bedLength" value="250" step="1" min="20">
-                        </div>
-                    </div>
-                    <div class="hint-box">
-                        <strong>Pflichtangabe</strong> vor dem Generieren - danach werden die Segmente automatisch auf diese Plattengröße zugeschnitten. Passen nicht alle Teile auf eine Platte, werden automatisch weitere Druckplatten angelegt (nebeneinander in der 3D-Vorschau, beim Export eine Datei je Platte).
-                    </div>
-                </div>
-
-                <div class="card">
-                    <h3><span class="card-icon">🧱</span>Element-Typ &amp; Maße</h3>
+                    <h3><span class="card-icon">🧱</span>3D-Modell-Generator</h3>
                     <select id="elementType">
                         <option value="bande">Bande (Beton-Leitwand-Optik)</option>
                         <option value="curb">Curb (Rampe zur Fahrbahn)</option>
@@ -122,7 +113,7 @@
                     <div class="input-row" id="curbDimsRow">
                         <div>
                             <label>Curb Höhe (mm):</label>
-                            <input type="number" id="curbHeight" value="2" step="0.1" min="0.4">
+                            <input type="number" id="curbHeight" value="1.2" step="0.1" min="0.4">
                         </div>
                         <div>
                             <label>Curb Tiefe (mm):</label>
@@ -132,16 +123,32 @@
                     <div class="input-row" id="curbPatternRow">
                         <div>
                             <label>Farbblock-Länge (mm):</label>
-                            <input type="number" id="curbPatternLength" value="15" step="0.5" min="5" max="50">
+                            <input type="number" id="curbPatternLength" value="20" step="0.5" min="5" max="50">
                         </div>
                     </div>
-                    <div class="hint" id="curbGeometryHint">Der weiße Grundkörper ist fest 0,4 mm hoch. Die Curb-Neigung ergibt sich automatisch aus Curb-Höhe und Curb-Tiefe. Die Farbblock-Länge steuert zugleich die Struktur: die Längsstruktur läuft synchron zum Farbraster und ist jetzt halb so dicht wie zuvor: über zwei Farbblöcke entstehen 5 Strukturfelder. Bei 15 mm Farbblock-Länge entspricht das einem Strukturraster von 6 mm im Modell. Die Quer-Stufen, die den Curb-Winkel bilden, bleiben unverändert.</div>
+                    <div class="hint" id="curbGeometryHint">Der weiße Grundkörper ist fest 0,4 mm hoch. Die Curb-Neigung ergibt sich automatisch aus Curb-Höhe und Curb-Tiefe. Die Farbblock-Länge steuert zugleich die Struktur: die Längsstruktur läuft synchron zum Farbraster und ist jetzt halb so dicht wie zuvor: über zwei Farbblöcke entstehen 5 Strukturfelder. Bei 20 mm Farbblock-Länge entspricht das einem Strukturraster von 8 mm im Modell. Die Quer-Stufen, die den Curb-Winkel bilden, bleiben unverändert.</div>
                     <button id="generate3d" class="btn-primary">🧊 3D Modell Generieren</button>
                 </div>
             </div>
 
-            <!-- TAB: Export & Speichern -->
+            <!-- TAB: Generieren & Export -->
             <div class="tab-panel" data-panel="export">
+                <div class="card">
+                    <h3><span class="card-icon">🖨️</span>Druckbett-Größe</h3>
+                    <div class="input-row">
+                        <div>
+                            <label>Breite X (mm) *</label>
+                            <input type="number" id="bedWidth" value="250" step="1" min="20">
+                        </div>
+                        <div>
+                            <label>Tiefe Y (mm) *</label>
+                            <input type="number" id="bedLength" value="250" step="1" min="20">
+                        </div>
+                    </div>
+                    <div class="hint-box">
+                        <strong>Pflichtangabe</strong> für das Zuschneiden und Platzieren der Segmente auf dem Druckbett. Passen nicht alle Teile auf eine Platte, werden automatisch weitere Druckplatten angelegt.
+                    </div>
+                </div>
                 <div class="card">
                     <h3><span class="card-icon">📋</span>Stückliste</h3>
                     <div id="partList">Keine Segmente generiert</div>
@@ -153,22 +160,27 @@
                     <div class="hint">STL enthält keine Farbe (Format-Grenze). 3MF ist ein modernes ZIP/XML-Format mit Farbe pro Bauteil - unterstützt u.a. von BambuStudio, OrcaSlicer, PrusaSlicer &amp; Cura. Bei mehreren Druckplatten enthält der Download je Platte eine eigene Datei.</div>
                 </div>
                 <div class="card">
-                    <h3><span class="card-icon">💾</span>Projekt Speichern / Laden</h3>
-                    <div class="button-row">
-                        <button id="saveFileBtn" class="btn-secondary">Speichern (.json)</button>
-                        <button id="loadFileBtn" class="btn-secondary">Laden (.json)</button>
-                    </div>
+                    <h3><span class="card-icon">📂</span>Projekt laden</h3>
+                    <button id="loadFileBtn" class="btn-secondary">Projekt laden (.json)</button>
                     <input type="file" id="projectFileInput" accept=".json" style="display: none;">
-                    <div class="hint">Deine Skizze wird zusätzlich automatisch in diesem Browser zwischengespeichert (lokal, ohne Server).</div>
+                    <div class="hint">Speichern ist oben als eigener Schnellzugriff erreichbar. Deine Skizze wird zusätzlich automatisch in diesem Browser zwischengespeichert.</div>
                 </div>
             </div>
         </div>
 
         <!-- Drawing & 3D Viewport -->
         <div id="viewports">
-            <div class="viewport-container" id="viewport2D">
-                <span class="label">2D Skizze</span>
+            <div class="viewport-container mode-2d" id="viewport2D">
+                <div class="viewport-topbar">
+                    <div class="view-heading">Ansicht</div>
+                    <div class="view-switch" id="viewSwitch">
+                        <button id="viewMode2DBtn" class="view-switch-btn active" type="button">2D Skizze</button>
+                        <button id="viewMode3DBtn" class="view-switch-btn" type="button">3D Strecke</button>
+                        <button id="viewModeLayoutBtn" class="view-switch-btn" type="button">Druckbett</button>
+                    </div>
+                </div>
                 <canvas id="sketchCanvas"></canvas>
+                <div id="threeContainer" aria-hidden="true"></div>
                 <div id="pathFinishPopup" class="path-finish-popup" style="display:none;">
                     <button id="newStrandPopupBtn" class="popup-btn popup-btn-check" title="Strang abschließen">✓</button>
                 </div>
@@ -179,19 +191,22 @@
                     <button id="zoomInBtn" title="Vergrößern">+</button>
                     <button id="zoomOutBtn" title="Verkleinern">−</button>
                 </div>
-            </div>
-            <div class="viewport-container" id="viewport3D">
-                <span class="label">3D Vorschau (Druckplatte(n) gemäß Tab „Bauteil")</span>
-                <div id="threeContainer"></div>
+                <div id="viewportBottomBar">
+                    <button id="measureModeBtn" class="btn-secondary btn-compact" type="button">📏 Messen: Aus</button>
+                    <div class="hint" id="measureStatus">Messfunktion aus. Aktivieren und zwei Punkte auf der Strecke wählen.</div>
+                </div>
             </div>
         </div>
     </div>
 
     <!-- Mobile Bottom Nav (nur < 900px sichtbar) -->
-    <div id="mobileBottomNav">
-        <button class="mnav-btn active" data-view="sketch">✏️<span>Skizze</span></button>
-        <button class="mnav-btn" data-view="3d">🧊<span>3D</span></button>
-        <button class="mnav-btn" data-view="settings">⚙️<span>Einstellungen</span></button>
+    <div id="mobileSidebarBackdrop" aria-hidden="true"></div>
+    <div id="mobileBottomNav" aria-label="Mobile Navigation">
+        <button class="mnav-btn active" data-mobile-section="draw">✏️<span>Zeichnen</span></button>
+        <button class="mnav-btn" data-mobile-section="model">🧊<span>Modell</span></button>
+        <button class="mnav-btn" data-mobile-section="preview">👁️<span>3D</span></button>
+        <button class="mnav-btn" data-mobile-section="export">📦<span>Export</span></button>
+        <button class="mnav-btn mnav-menu-btn" id="mobileSidebarToggle" type="button" aria-expanded="false">☰<span>Menü</span></button>
     </div>
 
     <script src="app.js"></script>
